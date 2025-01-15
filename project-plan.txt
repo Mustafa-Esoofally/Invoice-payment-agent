@@ -1,0 +1,22 @@
+Here's a quick overview of the project:
+
+An accounts payable agent
+
+- Scans the inbox for new payment invoices  extracting payee and amount. Can start with simple text emails as well
+Extract payee and amount and generates a payment link using Payman API
+
+- Receive a notification on the dashboard with actions to approve / snooze / reject
+
+Client:
+- Connect inbox and allow access to emails
+- Option to start / stop auto invoice payment
+- A page to view history of all payment notifications generated with payment status and other details
+
+Backend:
+- Fetch emails every minute or create a webhook for new emails
+- Use the Payman API to generate payments
+
+Bonus: Try to use Ambient Agents in this implementation
+
+
+The gmail auth should be handled in the frontend using composio. Then we need to save these credentials in json file for future use. We will then  use the saved information for fetching emails using the agent and then process the invoices
