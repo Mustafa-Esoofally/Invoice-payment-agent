@@ -6,7 +6,7 @@ dotenv.config();
 
 const invoice = {
     invoiceNumber: "INV-2024-001",
-    amount: 2500.00,
+    amount: 50.00,
     currency: "USD",
     recipientName: "Tech Consulting Services",
     accountNumber: "1234567890",
@@ -16,12 +16,12 @@ const invoice = {
     items: [
         {
             description: "Software Architecture Consulting",
-            amount: 1500.00,
+            amount: 30.00,
             hours: 10
         },
         {
             description: "Code Review Services",
-            amount: 1000.00,
+            amount: 20.00,
             hours: 8
         }
     ]
@@ -30,6 +30,16 @@ const invoice = {
 async function testDirectPayment() {
     console.log('\n🧪 Testing direct payment through PaymanService...');
     try {
+        // First check balance
+        console.log('\n💰 Checking available balance...');
+        const balance = await paymanService.getBalance();
+        console.log('Current balance:', balance);
+
+        if (!balance || balance.amount < invoice.amount) {
+            console.log('⚠️ Insufficient funds. Available:', balance?.amount, 'Required:', invoice.amount);
+            return null;
+        }
+
         const payment = await paymanService.processPayment({
             amount: invoice.amount,
             currency: invoice.currency,

@@ -8,35 +8,24 @@ class ProcessPaymentTool extends Tool {
     description = 'Process a payment using Payman AI. Input should be a JSON string containing payment details (amount, recipientName, accountNumber, routingNumber, description)';
 
     async _call(inputStr) {
-        try {
-            const paymentData = JSON.parse(inputStr);
-            // Extract routingNumber from the input if it's nested
-            if (paymentData.bankDetails && paymentData.bankDetails.routingNumber) {
-                paymentData.routingNumber = paymentData.bankDetails.routingNumber;
-                delete paymentData.bankDetails;
-            }
-            
-            const payment = await paymanService.processPayment(paymentData);
-            return `Successfully processed payment. Payment ID: ${payment.id}`;
-        } catch (error) {
-            console.error('Error processing payment:', error);
-            throw error;
+        const paymentData = JSON.parse(inputStr);
+        if (paymentData.bankDetails?.routingNumber) {
+            paymentData.routingNumber = paymentData.bankDetails.routingNumber;
+            delete paymentData.bankDetails;
         }
+        
+        const payment = await paymanService.processPayment(paymentData);
+        return `Successfully processed payment. Reference: ${payment.reference}`;
     }
 }
 
 class PaymentStatusTool extends Tool {
     name = 'check_payment_status';
-    description = 'Check the status of a payment using its Payman payment ID';
+    description = 'Check the status of a payment using its Payman payment reference';
 
-    async _call(paymentId) {
-        try {
-            const status = await paymanService.getPaymentStatus(paymentId);
-            return `Payment status for ID ${paymentId}: ${status}`;
-        } catch (error) {
-            console.error('Error checking payment status:', error);
-            throw error;
-        }
+    async _call(reference) {
+        const status = await paymanService.getPaymentStatus(reference);
+        return `Payment status for reference ${reference}: ${status}`;
     }
 }
 
@@ -45,13 +34,8 @@ class SearchPayeesTool extends Tool {
     description = 'Search for payees in the Payman system';
 
     async _call(query) {
-        try {
-            const payees = await paymanService.searchPayees(query);
-            return JSON.stringify(payees, null, 2);
-        } catch (error) {
-            console.error('Error searching payees:', error);
-            throw error;
-        }
+        const payees = await paymanService.searchPayees(query);
+        return JSON.stringify(payees, null, 2);
     }
 }
 
@@ -60,13 +44,8 @@ class CheckBalanceTool extends Tool {
     description = 'Check the current balance of the Payman account';
 
     async _call() {
-        try {
-            const balance = await paymanService.getBalance();
-            return `Current balance: ${balance.amount} ${balance.currency}`;
-        } catch (error) {
-            console.error('Error checking balance:', error);
-            throw error;
-        }
+        const balance = await paymanService.getBalance();
+        return `Current balance: ${balance.amount} ${balance.currency}`;
     }
 }
 
@@ -97,51 +76,24 @@ export class PaymentAgent {
         return this;
     }
 
+    async invoke(input) {
+        const result = await this.executor.invoke({ input });
+        return result.output;
+    }
+
     async processPayment(paymentDetails) {
-        try {
-            const result = await this.executor.invoke({
-                input: `Process a payment with the following details: ${JSON.stringify(paymentDetails)}`,
-            });
-            return result.output;
-        } catch (error) {
-            console.error('Error in payment agent:', error);
-            throw error;
-        }
+        return this.invoke(`Process a payment with the following details: ${JSON.stringify(paymentDetails)}`);
     }
 
     async checkPaymentStatus(paymentId) {
-        try {
-            const result = await this.executor.invoke({
-                input: `Check the status of payment with ID ${paymentId}`,
-            });
-            return result.output;
-        } catch (error) {
-            console.error('Error checking payment status:', error);
-            throw error;
-        }
+        return this.invoke(`Check the status of payment with ID ${paymentId}`);
     }
 
     async searchPayees(query) {
-        try {
-            const result = await this.executor.invoke({
-                input: `Search for payees matching: ${query}`,
-            });
-            return result.output;
-        } catch (error) {
-            console.error('Error searching payees:', error);
-            throw error;
-        }
+        return this.invoke(`Search for payees matching: ${query}`);
     }
 
     async getBalance() {
-        try {
-            const result = await this.executor.invoke({
-                input: 'Check the current balance of the Payman account',
-            });
-            return result.output;
-        } catch (error) {
-            console.error('Error getting balance:', error);
-            throw error;
-        }
+        return this.invoke('Check the current balance of the Payman account');
     }
 } 
