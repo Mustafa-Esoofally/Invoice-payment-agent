@@ -1,61 +1,37 @@
 import { createInvoiceAgent } from '../agents/invoiceAgent.js';
+import samplePayments from './samplePayments.json' assert { type: "json" };
+import fs from 'fs';
+import path from 'path';
 
-// Sample invoice data
-const sampleInvoice = {
-  invoiceNumber: 'INV-2024-001',
-  date: '2024-01-16',
-  dueDate: '2024-02-15',
-  recipientName: 'Tech Consulting Services',
-  description: 'Q1 2024 Software Development Services',
-  amount: 2670.00,
-  currency: 'USD',
-  customerEmail: 'billing@techconsulting.com',
-  memo: 'Q1 2024 Development',
-  lineItems: [
-    {
-      description: 'Software Development',
-      hours: 89,
-      rate: 30,
-      amount: 2670.00
-    }
-  ]
-};
-
-async function main() {
+async function testInvoiceAgent() {
   try {
-    console.log('\n🤖 Creating invoice processing agent...');
+    console.log('\n=== Starting Invoice Processing Test ===\n');
+    
     const agent = await createInvoiceAgent();
-
-    console.log('\n📄 Processing sample invoice...');
-    const result = await agent.processInvoice(sampleInvoice);
-    console.log('\n✅ Processing result:', JSON.stringify(result, null, 2));
-
-    // Test batch processing
-    console.log('\n📚 Testing batch processing...');
-    const batchResults = await agent.processBatch([
-      sampleInvoice,
-      {
-        ...sampleInvoice,
-        invoiceNumber: 'INV-2024-002',
-        amount: 1.00,
-        description: 'Test Invoice',
-        memo: 'Small test payment'
-      }
-    ]);
-
-    console.log('\n✅ Batch processing results:', JSON.stringify(batchResults, null, 2));
-
-  } catch (error) {
-    console.error('\n❌ Error:', error);
+    
+    console.log('Processing batch of invoices...\n');
+    const result = await agent.processBatch(samplePayments.payments);
+    
+    // Format and display the result
+    if (typeof result.output === 'string') {
+      console.log(result.output);
+      
+      // Save to file
+      const paymentDetailsPath = path.join(process.cwd(), 'payment_details.txt');
+      fs.appendFileSync(paymentDetailsPath, '\n' + result.output + '\n');
+      console.log('\nPayment details have been saved to payment_details.txt');
+    } else {
+      console.log(JSON.stringify(result.output, null, 2));
+    }
+    
+    console.log('\n=== Invoice Processing Test Complete ===\n');
+  } catch (err: any) {
+    console.error('\n❌ Test failed with error:', err.message);
     process.exit(1);
   }
 }
 
-// Run the test
-main().then(() => {
-  console.log('\n✅ Test completed successfully');
-  process.exit(0);
-}).catch(error => {
-  console.error('\n❌ Test failed:', error);
+testInvoiceAgent().catch((err: any) => {
+  console.error('Failed to run test:', err.message);
   process.exit(1);
 }); 

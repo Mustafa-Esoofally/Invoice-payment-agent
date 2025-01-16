@@ -1,7 +1,31 @@
-import { Suspense } from 'react';
+'use client';
+
+import { Suspense, useState, useCallback } from 'react';
 import GmailAuth from '@/components/GmailAuth';
+import GmailProfile from '@/components/GmailProfile';
 
 export default function SettingsPage() {
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  const handleAuthSuccess = useCallback((connectedAccountId: string) => {
+    console.log('[Settings] Auth success callback with connectedAccountId:', {
+      id: connectedAccountId.substring(0, 8) + '...',  // Log part of ID for debugging
+      timestamp: new Date().toISOString()
+    });
+
+    // Store the ID in localStorage (as a backup, though it's also stored in the callback page)
+    localStorage.setItem('gmailConnectedAccountId', connectedAccountId);
+    
+    console.log('[Settings] Triggering profile refresh...');
+    // Wait a bit before triggering the refresh
+    setTimeout(() => {
+      setRefreshTrigger(prev => {
+        console.log('[Settings] Incrementing refresh trigger:', prev + 1);
+        return prev + 1;
+      });
+    }, 2000); // Wait 2 seconds before starting to poll for profile
+  }, []);
+
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold text-gray-900 mb-8">Settings</h1>
@@ -11,11 +35,10 @@ export default function SettingsPage() {
           <h2 className="text-xl font-semibold text-gray-800 mb-4">Email Integration</h2>
           <div className="bg-gray-50 rounded-lg p-6">
             <Suspense fallback={<div>Loading...</div>}>
-              <GmailAuth 
-                onAuthSuccess={(credentials) => {
-                  console.log('Gmail auth success:', credentials);
-                }} 
-              />
+              <div className="space-y-6" id="gmail-section">
+                <GmailProfile refreshTrigger={refreshTrigger} />
+                <GmailAuth onAuthSuccess={handleAuthSuccess} />
+              </div>
             </Suspense>
           </div>
         </section>
