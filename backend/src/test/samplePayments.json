@@ -1,0 +1,24 @@
+{
+  "payments": [
+    {
+      "id": "PAY001",
+      "amount": 2670.00,
+      "currency": "USD",
+      "recipientName": "Tech Consulting Services",
+      "description": "Q1 2024 Software Development Services",
+      "customerId": "cust_tech1",
+      "customerEmail": "billing@techconsulting.com",
+      "memo": "Q1 2024 Development"
+    },
+    {
+      "id": "PAY002",
+      "amount": 1.00,
+      "currency": "USD",
+      "recipientName": "Tech Consulting Services",
+      "description": "Test Payment",
+      "customerId": "cust_tech1",
+      "customerEmail": "billing@techconsulting.com",
+      "memo": "Test Payment - Small Amount"
+    }
+  ]
+} 
