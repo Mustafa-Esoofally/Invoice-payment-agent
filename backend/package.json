@@ -1,0 +1,23 @@
+{
+  "name": "invoice-payment-agent-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "node src/test/testPaymentAgent.js",
+    "test:payment": "node src/test/testPayment.js",
+    "process-invoice": "node src/test/processInvoice.js"
+  },
+  "dependencies": {
+    "@langchain/core": "^0.1.1",
+    "@langchain/openai": "^0.0.1",
+    "axios": "^1.7.9",
+    "dotenv": "^16.3.1",
+    "langchain": "^0.1.1",
+    "paymanai": "^2.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
