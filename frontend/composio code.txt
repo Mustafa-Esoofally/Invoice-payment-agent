@@ -89,3 +89,139 @@ agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
 task = "your task description here"
 result = agent_executor.invoke({"input": task})
 print(result)
+
+==
+gmailExecute tools
+Step 3/3 :
+Configure Integration
+Connect an account
+Execute tools
+
+Action
+
+GMAIL FETCH EMAILS
+Schema
+🪄 Natural Language Execution
+Generate inputs using function calling
+Generate
+📝 Action Parameters
+Specify the required inputs for this action
+Run
+User Id : string
+key: user_id
+
+The user's email address or 'me' for the authenticated user.
+me
+Max Results : integer
+key: max_results
+
+Maximum number of messages to return.
+10
+Page Token : string
+key: page_token
+
+Page token to retrieve a specific page of results in the lis...Read more
+Query : string
+key: query
+
+Only return messages matching the specified query.
+Label Ids : array
+key: label_ids
+
+Filter messages by their label IDs. Labels identify the stat...Read more
+Include Spam Trash : boolean
+key: include_spam_trash
+
+Include messages from SPAM and TRASH in the results.
+
+No
+Language
+logo
+JS
+logo
+Python
+Framework
+CrewAI
+LangChain
+Letta
+
++ More
+Use LangChain with Composio
+
+Copy
+from langchain.agents import create_openai_functions_agent, AgentExecutor
+from langchain import hub
+from langchain_openai import ChatOpenAI
+from composio_langchain import ComposioToolSet, Action, App
+llm = ChatOpenAI()
+prompt = hub.pull("hwchase17/openai-functions-agent")
+
+composio_toolset = ComposioToolSet(api_key="ixbtlkivtqk45d0qf2epa5")
+tools = composio_toolset.get_tools(actions=['GMAIL_FETCH_EMAILS'])
+
+agent = create_openai_functions_agent(llm, tools, prompt)
+agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+task = "your task description here"
+result = agent_executor.invoke({"input": task})
+print(result)
+
+
+========
+gmailExecute tools
+Step 3/3 :
+Configure Integration
+Connect an account
+Execute tools
+
+Action
+
+GMAIL GET ATTACHMENT
+Schema
+🪄 Natural Language Execution
+Generate inputs using function calling
+Generate
+📝 Action Parameters
+Specify the required inputs for this action
+Run
+Message Id* : string
+key: message_id
+
+Id of the message(mail) containing the attachment
+Attachment Id* : string
+key: attachment_id
+
+Id of the target attachment
+File Name* : string
+key: file_name
+
+Filename of the attachment file
+User Id : string
+key: user_id
+
+The user's email address or 'me' for the authenticated user.
+me
+Language
+logo
+JS
+logo
+Python
+Framework
+CrewAI
+LangChain
+Letta
+
++ More
+Use LangChain with Composio
+
+Copy
+llm = ChatOpenAI()
+prompt = hub.pull("hwchase17/openai-functions-agent")
+
+composio_toolset = ComposioToolSet(api_key="ixbtlkivtqk45d0qf2epa5")
+tools = composio_toolset.get_tools(actions=['GMAIL_GET_ATTACHMENT'])
+
+agent = create_openai_functions_agent(llm, tools, prompt)
+agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+task = "your task description here"
+result = agent_executor.invoke({"input": task})
+print(result)
