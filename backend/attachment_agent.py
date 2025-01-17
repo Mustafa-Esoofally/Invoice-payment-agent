@@ -1,24 +1,21 @@
-from composio_langchain import ComposioToolSet
-from dotenv import load_dotenv
-import os
-import base64
-import json
+from composio_client import get_composio_client
 from pathlib import Path
-
-# Load environment variables
-load_dotenv()
+import os
+import shutil
+from typing import Dict, List, Optional
 
 def debug_print(title: str, data: any, indent: int = 2):
     """Helper function to print debug information"""
     print(f"\n🔍 DEBUG: {title}")
     if isinstance(data, (dict, list)):
+        import json
         print(json.dumps(data, indent=indent, default=str))
     else:
         print(data)
     print("-" * 50)
 
 class AttachmentAgent:
-    def __init__(self, download_dir="downloads", debug=True):
+    def __init__(self, download_dir: str = "downloads", debug: bool = False):
         """Initialize the attachment agent
         
         Args:
@@ -26,25 +23,34 @@ class AttachmentAgent:
             debug (bool): Enable debug output
         """
         self.debug = debug
-        
-        # Initialize Composio toolset
-        self.composio = ComposioToolSet(api_key=os.getenv("COMPOSIO_API_KEY"))
-        self.tools = self.composio.get_tools(actions=['GMAIL_GET_ATTACHMENT'])
-        self.attachment_tool = next(tool for tool in self.tools if tool.name == 'GMAIL_GET_ATTACHMENT')
-        
-        # Setup download directory
         self.download_dir = Path(download_dir)
         self.download_dir.mkdir(exist_ok=True)
+        
+        # Get Composio client and tool
+        client = get_composio_client()
+        self.attachment_tool = client.get_tool('GMAIL_GET_ATTACHMENT')
+        
+        if not self.attachment_tool:
+            raise ValueError("Failed to initialize Gmail attachment tool")
         
         if self.debug:
             debug_print("Attachment Agent Initialized", {
                 "download_dir": str(self.download_dir),
-                "composio_api_key": bool(os.getenv("COMPOSIO_API_KEY")),
-                "tool_name": self.attachment_tool.name if self.attachment_tool else None
+                "composio_api_key": bool(client.api_key),
+                "tool_name": self.attachment_tool.name
             })
     
-    def download_attachment(self, message_id: str, attachment_id: str, filename: str):
-        """Download a specific attachment from an email"""
+    def download_attachment(self, message_id: str, attachment_id: str, filename: str) -> Dict:
+        """Download a specific attachment
+        
+        Args:
+            message_id (str): Gmail message ID
+            attachment_id (str): Attachment ID
+            filename (str): Original filename
+            
+        Returns:
+            dict: Download result with success status and file details
+        """
         try:
             if self.debug:
                 debug_print("Download Request", {
@@ -55,8 +61,8 @@ class AttachmentAgent:
             
             print(f"Downloading attachment: {filename}")
             
-            # Call the Gmail attachment tool
-            request_params = {
+            # Prepare API request
+            params = {
                 'message_id': message_id,
                 'attachment_id': attachment_id,
                 'file_name': filename,
@@ -64,34 +70,26 @@ class AttachmentAgent:
             }
             
             if self.debug:
-                debug_print("API Request Parameters", request_params)
+                debug_print("API Request Parameters", params)
             
-            result = self.attachment_tool.run(request_params)
+            # Call the API
+            result = self.attachment_tool.run(params)
             
             if self.debug:
                 debug_print("API Response", result)
             
-            if not result or not isinstance(result, dict):
-                error_msg = 'Invalid response from Gmail API'
-                if self.debug:
-                    debug_print("Error", error_msg)
-                return {'success': False, 'error': error_msg}
-            
-            # Check if the response contains a file path
             if result.get('successfull') and result.get('data', {}).get('file'):
                 file_path = result['data']['file']
+                
                 if self.debug:
                     debug_print("File Path from API", file_path)
                 
+                # Create a unique filename to avoid overwrites
+                target_path = self._get_safe_filename(filename)
+                
                 try:
-                    # Create a safe filename in our download directory
-                    safe_filename = self._get_safe_filename(filename)
-                    target_path = self.download_dir / safe_filename
-                    
-                    # Copy the file from the API's location to our download directory
-                    import shutil
+                    # Copy file to download directory
                     shutil.copy2(file_path, target_path)
-                    
                     result = {
                         'success': True,
                         'file_path': str(target_path),
@@ -105,149 +103,120 @@ class AttachmentAgent:
                     return result
                     
                 except Exception as e:
-                    error_msg = f'Failed to copy file: {str(e)}'
+                    error_msg = f"Failed to copy file: {str(e)}"
                     if self.debug:
-                        import traceback
-                        debug_print("Copy Error", {
-                            "error": error_msg,
-                            "traceback": traceback.format_exc()
-                        })
-                    return {'success': False, 'error': error_msg}
-            
-            # Extract file data from response (legacy format)
-            file_data = result.get('file', {})
-            if not file_data:
-                error_msg = 'No file data in response'
+                        debug_print("File Copy Error", error_msg)
+                    return {
+                        'success': False,
+                        'error': error_msg,
+                        'filename': filename
+                    }
+            else:
+                error_msg = result.get('error', 'No file data in response')
                 if self.debug:
-                    debug_print("Error", error_msg)
-                return {'success': False, 'error': error_msg}
-            
-            # Get file content and name
-            content = file_data.get('content')
-            name = file_data.get('name', filename)
-            
-            if self.debug:
-                debug_print("File Info", {
-                    "name": name,
-                    "has_content": bool(content),
-                    "content_length": len(content) if content else 0
-                })
-            
-            if not content:
-                error_msg = 'No file content in response'
-                if self.debug:
-                    debug_print("Error", error_msg)
-                return {'success': False, 'error': error_msg}
-            
-            # Create a safe filename
-            safe_filename = self._get_safe_filename(name)
-            file_path = self.download_dir / safe_filename
-            
-            if self.debug:
-                debug_print("File Path", str(file_path))
-            
-            # Save the file
-            try:
-                # Decode base64 content and write to file
-                file_content = base64.b64decode(content)
-                with open(file_path, 'wb') as f:
-                    f.write(file_content)
-                
-                result = {
-                    'success': True,
-                    'file_path': str(file_path),
-                    'original_name': name,
-                    'size': len(file_content)
+                    debug_print("API Error", error_msg)
+                return {
+                    'success': False,
+                    'error': error_msg,
+                    'filename': filename
                 }
                 
-                if self.debug:
-                    debug_print("Download Success", result)
-                
-                return result
+        except Exception as e:
+            error_msg = str(e)
+            if self.debug:
+                debug_print("Download Error", error_msg)
+            return {
+                'success': False,
+                'error': error_msg,
+                'filename': filename
+            }
+    
+    def download_multiple_attachments(self, attachments: List[Dict]) -> List[Dict]:
+        """Download multiple attachments
+        
+        Args:
+            attachments (list): List of attachment information dictionaries
             
-            except Exception as e:
-                error_msg = f'Failed to save file: {str(e)}'
-                if self.debug:
-                    import traceback
-                    debug_print("Save Error", {
-                        "error": error_msg,
-                        "traceback": traceback.format_exc()
-                    })
-                return {'success': False, 'error': error_msg}
+        Returns:
+            list: List of download results
+        """
+        try:
+            if self.debug:
+                debug_print("Multiple Download Request", attachments)
+            
+            results = []
+            for attachment in attachments:
+                result = self.download_attachment(
+                    message_id=attachment['message_id'],
+                    attachment_id=attachment['attachment_id'],
+                    filename=attachment['filename']
+                )
+                results.append(result)
+            
+            if self.debug:
+                debug_print("Multiple Download Results", results)
+            
+            return results
             
         except Exception as e:
             error_msg = str(e)
             if self.debug:
-                import traceback
-                debug_print("Download Error", {
-                    "error": error_msg,
-                    "traceback": traceback.format_exc()
-                })
-            return {'success': False, 'error': error_msg}
+                debug_print("Multiple Download Error", error_msg)
+            return [{
+                'success': False,
+                'error': error_msg,
+                'filename': att.get('filename', 'Unknown')
+            } for att in attachments]
     
-    def download_multiple_attachments(self, attachments_info: list):
-        """Download multiple attachments"""
-        if self.debug:
-            debug_print("Multiple Download Request", attachments_info)
+    def _get_safe_filename(self, filename: str) -> Path:
+        """Create a safe filename that doesn't overwrite existing files
         
-        results = []
-        for att in attachments_info:
-            result = self.download_attachment(
-                message_id=att['message_id'],
-                attachment_id=att['attachment_id'],
-                filename=att['filename']
-            )
-            results.append({
-                'filename': att['filename'],
-                **result
-            })
-        
-        if self.debug:
-            debug_print("Multiple Download Results", results)
-        
-        return results
-    
-    def _get_safe_filename(self, filename: str) -> str:
-        """Create a safe version of the filename"""
-        # Remove any path components
-        filename = os.path.basename(filename)
-        
-        # If file exists, add a number to the filename
-        base, ext = os.path.splitext(filename)
+        Args:
+            filename (str): Original filename
+            
+        Returns:
+            Path: Safe file path
+        """
+        name = Path(filename).stem
+        suffix = Path(filename).suffix
         counter = 1
-        new_filename = filename
         
-        while (self.download_dir / new_filename).exists():
-            new_filename = f"{base}_{counter}{ext}"
+        while True:
+            if counter == 1:
+                new_path = self.download_dir / filename
+            else:
+                new_path = self.download_dir / f"{name}_{counter}{suffix}"
+            
+            if not new_path.exists():
+                return new_path
             counter += 1
-        
-        return new_filename
 
 def main():
-    # Initialize the attachment agent with debug mode
+    # Initialize the attachment agent
     agent = AttachmentAgent(debug=True)
     
-    # Example attachments to download
+    # Example attachment information
     attachments = [
         {
-            'message_id': 'your_message_id',
-            'attachment_id': 'your_attachment_id',
-            'filename': 'example.pdf'
+            "message_id": "1946aaf0de7d93b8",
+            "attachment_id": "attachment-0f0edf62",
+            "filename": "Invoice-SlingshotAI-sept-21.pdf"
         }
     ]
     
     # Download attachments
+    print("\nDownloading attachments...")
     results = agent.download_multiple_attachments(attachments)
     
     # Print results
     for result in results:
         if result['success']:
-            print(f"\n✅ Successfully downloaded: {result['filename']}")
-            print(f"   Saved as: {result['file_path']}")
-            print(f"   Size: {result['size']} bytes")
+            print(f"\n✅ Downloaded: {result['original_name']}")
+            print(f"Saved as: {result['file_path']}")
+            print(f"Size: {result['size']} bytes")
         else:
             print(f"\n❌ Failed to download {result['filename']}")
-            print(f"   Error: {result['error']}")
+            print(f"Error: {result['error']}")
 
 if __name__ == "__main__":
     main() 

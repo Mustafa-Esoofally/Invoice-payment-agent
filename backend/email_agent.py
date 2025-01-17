@@ -1,21 +1,21 @@
-from composio_langchain import ComposioToolSet
-from dotenv import load_dotenv
-import os
-import base64
+from composio_client import get_composio_client
 from datetime import datetime
-
-# Load environment variables
-load_dotenv()
+from typing import Dict, List, Optional
 
 class EmailAgent:
     def __init__(self):
-        # Initialize Composio toolset
-        self.composio = ComposioToolSet(api_key=os.getenv("COMPOSIO_API_KEY"))
-        self.tools = self.composio.get_tools(actions=['GMAIL_FETCH_EMAILS', 'GMAIL_GET_ATTACHMENT'])
-        self.gmail_tool = next(tool for tool in self.tools if tool.name == 'GMAIL_FETCH_EMAILS')
-        self.attachment_tool = next(tool for tool in self.tools if tool.name == 'GMAIL_GET_ATTACHMENT')
+        """Initialize the email agent with Composio tools."""
+        # Get Composio client
+        client = get_composio_client()
         
-    def fetch_emails(self, query: str = None, max_results: int = 15):
+        # Get required tools
+        self.gmail_tool = client.get_tool('GMAIL_FETCH_EMAILS')
+        self.attachment_tool = client.get_tool('GMAIL_GET_ATTACHMENT')
+        
+        if not self.gmail_tool or not self.attachment_tool:
+            raise ValueError("Failed to initialize required Gmail tools")
+    
+    def fetch_emails(self, query: str = None, max_results: int = 15) -> List[Dict]:
         """Fetch emails using Composio's Gmail integration"""
         try:
             # Add specific filters to reduce response size
@@ -38,7 +38,7 @@ class EmailAgent:
             print(f"Error fetching emails: {e}")
             return []
     
-    def get_attachment(self, message_id: str, attachment_id: str, file_name: str):
+    def get_attachment(self, message_id: str, attachment_id: str, file_name: str) -> Optional[Dict]:
         """Get a specific attachment from an email"""
         try:
             # Call the tool directly with parameters
@@ -54,7 +54,7 @@ class EmailAgent:
             print(f"Error getting attachment: {e}")
             return None
     
-    def _process_email_response(self, response):
+    def _process_email_response(self, response: Dict) -> List[Dict]:
         """Process the email response and extract relevant details"""
         if not response or not isinstance(response, dict):
             return []
@@ -97,7 +97,7 @@ class EmailAgent:
             print(f"Error processing response: {e}")
             return []
     
-    def _format_timestamp(self, timestamp_str):
+    def _format_timestamp(self, timestamp_str: str) -> Optional[str]:
         """Format timestamp to readable date"""
         if not timestamp_str:
             return None
@@ -114,7 +114,7 @@ def main():
     try:
         # Fetch emails with attachments from last 7 days
         print("Fetching emails...")
-        emails = agent.fetch_emails(max_results=15)
+        emails = agent.fetch_emails(query="has:attachment", max_results=15)
         
         if not emails:
             print("No emails found.")
