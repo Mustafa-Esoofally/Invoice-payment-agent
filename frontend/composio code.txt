@@ -1,3 +1,20 @@
+
+import { OpenAIToolSet } from 'composio-core';
+const toolset = new OpenAIToolSet({ apiKey: 'ixbtlkivtqk45d0qf2epa5' });
+
+const integration = await toolset.integrations.get({integrationId: '73876b33-344e-44fc-81f4-628298823368'});
+const expectedInputFields = await toolset.integrations.getRequiredParams(integration.id);
+// Collect auth params from your users
+console.log(expectedInputFields);
+const connectedAccount = await toolset.connectedAccounts.initiate({
+    integrationId: integration.id,
+    entityId: 'default',
+});
+
+// connected account properties:
+// connectionStatus (string), connectedAccountId (string), redirectUrl (string | null)
+console.log(connectedAccount.redirectUrl);
+=================
 gmailExecute tools
 Step 3/3 :
 Configure Integration

@@ -3,6 +3,8 @@
 from typing import Dict, List, Optional
 from pathlib import Path
 import os
+import json
+from datetime import datetime
 
 from tools.shared_tools import (
     debug_print,
@@ -11,7 +13,35 @@ from tools.shared_tools import (
 )
 from agents.email_agent import fetch_emails, download_attachment
 from agents.pdf_agent import extract_text
-from agents.payment_agent import validate_invoice, process_payment
+from agents.payment_agent import process_payment
+
+def save_payment_history(payment_data: Dict) -> None:
+    """Save payment data to JSON file.
+    
+    Args:
+        payment_data (Dict): Payment data to save
+    """
+    history_dir = ensure_directory("payment_history")
+    history_file = os.path.join(history_dir, "payment_history.json")
+    
+    # Load existing history
+    existing_history = []
+    if os.path.exists(history_file):
+        try:
+            with open(history_file, 'r') as f:
+                existing_history = json.load(f)
+        except json.JSONDecodeError:
+            existing_history = []
+    
+    # Add timestamp to payment data
+    payment_data["timestamp"] = datetime.now().isoformat()
+    
+    # Add new payment to history
+    existing_history.append(payment_data)
+    
+    # Save updated history
+    with open(history_file, 'w') as f:
+        json.dump(existing_history, f, indent=2)
 
 def process_invoice_emails(
     query: str = "subject:invoice has:attachment newer_than:7d",
@@ -81,27 +111,45 @@ def process_invoice_emails(
                 # Extract invoice data (mock implementation)
                 invoice_data = {
                     "invoice_number": "INV-2024-001",  # Would be extracted from PDF
-                    "amount": 1500.00,  # Would be extracted from PDF
+                    "paid_amount": 2500.00,  # Would be extracted from PDF
                     "recipient": "Slingshot AI",  # Would be extracted from PDF
                     "date": email["timestamp"],
                     "due_date": "2024-02-17",  # Would be extracted from PDF
                     "description": extract_result["pages"][0]["text"][:100]
                 }
                 
-                # Validate invoice data
-                validation_result = validate_invoice(
+                # Process payment
+                payment_result = process_payment(
                     invoice_data,
                     debug=debug
                 )
                 
-                if not validation_result["success"]:
-                    continue
+                # Add success flag if not present
+                if "success" not in payment_result:
+                    payment_result["success"] = "error" not in payment_result
                 
-                # Process payment
-                payment_result = process_payment(
-                    validation_result["validated_data"],
-                    debug=debug
-                )
+                # Create payment history entry
+                payment_history = {
+                    "email": {
+                        "subject": email["subject"],
+                        "sender": email["sender"],
+                        "timestamp": email["timestamp"]
+                    },
+                    "invoice": invoice_data,
+                    "payment": {
+                        "success": payment_result["success"],
+                        "amount": invoice_data["paid_amount"],
+                        "recipient": invoice_data["recipient"],
+                        "reference": payment_result.get("output", None),
+                        "error": payment_result.get("error", None) if not payment_result["success"] else None
+                    }
+                }
+                
+                # Save payment history
+                save_payment_history(payment_history)
+                
+                if not payment_result["success"]:
+                    continue
                 
                 processed_invoices.append({
                     "email": {
@@ -173,14 +221,16 @@ def main():
                 
                 print("\n💰 Invoice Data:")
                 print(f"  Number: {invoice['invoice']['invoice_number']}")
-                print(f"  Amount: {invoice['invoice']['amount']}")
+                print(f"  Amount: {invoice['invoice']['paid_amount']}")
                 print(f"  Recipient: {invoice['invoice']['recipient']}")
                 print(f"  Due Date: {invoice['invoice'].get('due_date', 'Not specified')}")
                 
                 print("\n💳 Payment Status:")
-                print(f"  ID: {invoice['payment']['payment_id']}")
-                print(f"  Status: {invoice['payment']['status']}")
-                print(f"  Method: {invoice['payment']['payment_method']}")
+                if invoice['payment']['success']:
+                    print(f"  Amount: {invoice['payment']['amount']}")
+                    print(f"  Reference: {invoice['payment']['output']}")
+                else:
+                    print(f"  Error: {invoice['payment']['error']}")
                 print("=" * 50)
         else:
             print(f"\n❌ Error: {result['error']}")
