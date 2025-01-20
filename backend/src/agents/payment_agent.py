@@ -1,203 +1,184 @@
-"""Payment agent for processing invoice payments."""
+"""Payment agent for processing invoice payments using Payman AI and Langchain."""
 
-from typing import Dict, List, Optional
-from pathlib import Path
+from typing import Dict, Optional
 import os
 import json
+from dotenv import load_dotenv
+from langchain.agents import AgentExecutor, create_openai_functions_agent
+from langchain_openai import ChatOpenAI
+from langchain import hub
 
+from tools.payment_tools import tools as payment_tools
 from tools.shared_tools import (
     debug_print,
     format_error,
-    format_currency,
-    ensure_directory
+    format_currency
 )
 
-class PaymentAgent:
-    """Agent for processing invoice payments."""
+# Load environment variables
+load_dotenv()
+
+def extract_payment_amount(invoice_data: Dict) -> Optional[float]:
+    """Extract the final payment amount from invoice data.
     
-    def __init__(self, debug: bool = False):
-        """Initialize the payment agent
-        
-        Args:
-            debug (bool): Enable debug output
-        """
-        self.debug = debug
-        
-        if self.debug:
-            debug_print("Payment Agent Initialized", {
-                "debug_mode": debug
-            })
+    Prioritizes paid_amount as it represents the actual amount to be paid.
+    If not found, checks other fields:
+    - paid_amount (primary)
+    - payment_amount
+    - final_payment
+    - amount_paid
     
-    def process_payment(
-        self,
-        invoice_data: Dict,
-        payment_method: str = "bank_transfer",
-        currency: str = "USD"
-    ) -> Dict:
-        """Process a payment for an invoice
+    Args:
+        invoice_data (dict): Invoice data
         
-        Args:
-            invoice_data (dict): Invoice data including amount and recipient
-            payment_method (str): Payment method to use
-            currency (str): Currency code
-            
-        Returns:
-            dict: Payment result
-        """
+    Returns:
+        float or None: Final payment amount if found, None otherwise
+    """
+    # First check paid_amount as it's the primary field
+    amount = invoice_data.get('paid_amount')
+    if amount is not None:
         try:
-            if self.debug:
-                debug_print("Payment Request", {
-                    "invoice_data": invoice_data,
-                    "payment_method": payment_method,
-                    "currency": currency
-                })
-            
-            # Validate invoice data
-            required_fields = ["amount", "recipient", "invoice_number"]
-            missing_fields = [f for f in required_fields if f not in invoice_data]
-            
-            if missing_fields:
-                error = {
-                    "success": False,
-                    "error": f"Missing required fields: {', '.join(missing_fields)}"
-                }
-                if self.debug:
-                    debug_print("Validation Error", error)
-                return error
-            
-            # Format amount for display
-            formatted_amount = format_currency(
-                float(invoice_data["amount"]),
-                currency
-            )
-            
-            # Process payment (mock implementation)
-            payment_result = {
-                "success": True,
-                "payment_id": "PAY123",  # Would be real ID from payment provider
-                "amount": formatted_amount,
-                "recipient": invoice_data["recipient"],
-                "invoice_number": invoice_data["invoice_number"],
-                "payment_method": payment_method,
-                "status": "completed",
-                "timestamp": "2024-01-17T12:00:00Z"  # Would be real timestamp
-            }
-            
-            if self.debug:
-                debug_print("Payment Success", payment_result)
-                
-            return payment_result
-            
-        except Exception as e:
-            error = format_error(e)
-            if self.debug:
-                debug_print("Payment Error", error)
-            return {"success": False, "error": str(e)}
+            amount = float(amount)
+            if amount > 0:
+                return amount
+        except (ValueError, TypeError):
+            pass
     
-    def validate_invoice(self, invoice_data: Dict) -> Dict:
-        """Validate invoice data format and required fields
-        
-        Args:
-            invoice_data (dict): Invoice data to validate
-            
-        Returns:
-            dict: Validation result
-        """
-        try:
-            if self.debug:
-                debug_print("Validation Request", {
-                    "invoice_data": invoice_data
-                })
-            
-            # Required fields
-            required_fields = [
-                "invoice_number",
-                "amount",
-                "recipient",
-                "date",
-                "due_date"
-            ]
-            
-            # Optional fields with defaults
-            optional_fields = {
-                "currency": "USD",
-                "payment_method": "bank_transfer",
-                "description": "",
-                "line_items": []
-            }
-            
-            # Check required fields
-            missing_fields = [f for f in required_fields if f not in invoice_data]
-            
-            if missing_fields:
-                error = {
-                    "success": False,
-                    "error": f"Missing required fields: {', '.join(missing_fields)}"
-                }
-                if self.debug:
-                    debug_print("Validation Error", error)
-                return error
-            
-            # Add defaults for missing optional fields
-            for field, default in optional_fields.items():
-                if field not in invoice_data:
-                    invoice_data[field] = default
-            
-            # Validate amount format
+    # Fallback fields that might contain the payment amount
+    amount_fields = [
+        'payment_amount',
+        'final_payment',
+        'amount_paid'
+    ]
+    
+    # Try each field
+    for field in amount_fields:
+        amount = invoice_data.get(field)
+        if amount is not None:
             try:
-                amount = float(invoice_data["amount"])
-                if amount <= 0:
-                    raise ValueError("Amount must be positive")
-            except ValueError as e:
-                error = {
-                    "success": False,
-                    "error": f"Invalid amount: {str(e)}"
-                }
-                if self.debug:
-                    debug_print("Amount Error", error)
-                return error
-            
-            response = {
-                "success": True,
-                "validated_data": invoice_data
+                amount = float(amount)
+                if amount > 0:
+                    return amount
+            except (ValueError, TypeError):
+                continue
+    
+    return None
+
+def create_payment_agent(debug: bool = False):
+    """Create a Langchain agent for payment processing."""
+    # Initialize LLM
+    llm = ChatOpenAI(
+        model=os.getenv("OPENAI_MODEL", "gpt-4"),
+        temperature=0
+    )
+    
+    # Get base prompt from hub
+    prompt = hub.pull("hwchase17/openai-functions-agent")
+    
+    # Create agent
+    agent = create_openai_functions_agent(llm, tools=payment_tools, prompt=prompt)
+    
+    # Create agent executor
+    agent_executor = AgentExecutor(
+        agent=agent,
+        tools=payment_tools,
+        verbose=debug
+    )
+    
+    return agent_executor
+
+def process_payment(
+    invoice_data: Dict,
+    debug: bool = False
+) -> Dict:
+    """Process a payment using the Langchain payment agent.
+    
+    Args:
+        invoice_data (dict): Invoice data including amount and recipient
+        debug (bool): Enable debug output
+        
+    Returns:
+        dict: Payment result
+    """
+    try:
+        if debug:
+            debug_print("Processing Invoice", invoice_data)
+        
+        # Extract the final payment amount
+        amount = extract_payment_amount(invoice_data)
+        
+        if amount is None:
+            return {
+                "success": False,
+                "error": "Could not find final payment amount in invoice data"
             }
-            
-            if self.debug:
-                debug_print("Validation Success", response)
-                
-            return response
-            
-        except Exception as e:
-            error = format_error(e)
-            if self.debug:
-                debug_print("Validation Error", error)
-            return {"success": False, "error": str(e)}
+        
+        if debug:
+            debug_print("Payment Amount", {
+                "amount": format_currency(amount)
+            })
+        
+        # Create payment agent
+        agent = create_payment_agent(debug)
+        
+        # Format prompt for the agent
+        prompt = f"""Process this invoice payment:
+
+Invoice Details:
+{json.dumps(invoice_data, indent=2)}
+
+Payment Amount: {format_currency(amount)}
+
+Follow these steps:
+1. Check the current balance using get_balance
+2. Search for the payee using search_payees with the recipient name
+3. Send the payment using send_payment with:
+   - amount: {amount}
+   - recipient: {invoice_data.get('recipient')}
+   - description: Payment for {invoice_data.get('invoice_number')}
+
+If any step fails, explain why and stop processing.
+"""
+        
+        # Run agent
+        result = agent.invoke({"input": prompt})
+        result["amount"] = amount
+        return result
+        
+    except Exception as e:
+        error = format_error(e)
+        if debug:
+            debug_print("Agent Error", error)
+        return {"success": False, "error": str(e)}
 
 def main():
-    """Example usage of PaymentAgent"""
+    """Example usage of payment agent"""
     try:
-        # Initialize agent
-        agent = PaymentAgent(debug=True)
+        print("\n🚀 Starting Payment Processing Test")
+        print("=" * 50)
         
         # Example invoice data
         invoice_data = {
             "invoice_number": "INV-2024-001",
-            "amount": 1500.00,
             "recipient": "Slingshot AI",
             "date": "2024-01-17",
             "due_date": "2024-02-17",
-            "description": "AI Development Services"
+            "description": "AI Development Services",
+            "subtotal": 8500.00,
+            "tax": 722.50,
+            "discount": 850.00,
+            "total": 8372.50,
+            "paid_amount": 2500.00,
+            "balance_due": 5872.50  # Final amount to pay
         }
         
-        # Validate invoice
-        validation_result = agent.validate_invoice(invoice_data)
-        
-        if validation_result["success"]:
-            # Process payment
-            agent.process_payment(validation_result["validated_data"])
+        # Process payment using agent
+        result = process_payment(invoice_data, debug=True)
+        print("\n✅ Agent Response:")
+        print(json.dumps(result, indent=2))
                 
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
+        print(f"\n❌ Error: {str(e)}")
 
 if __name__ == "__main__":
     main() 
