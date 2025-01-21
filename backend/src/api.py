@@ -92,20 +92,51 @@ async def get_payment_history() -> Dict[str, List]:
         Dict[str, List]: List of payment records
     """
     try:
-        history_file = "payment_history.json"
+        history_file = "invoice data/payment_history.json"
         if not os.path.exists(history_file):
             return {"payments": []}
             
         with open(history_file, 'r') as f:
             history = json.load(f)
             
-        return {"payments": history}
+        # Transform data to match frontend expectations
+        transformed_history = []
+        for record in history:
+            email_data = record.get("email_data", {})
+            invoice_data = record.get("invoice_data", {})
+            result = record.get("result", {})
+
+            transformed_record = {
+                "timestamp": record["timestamp"],
+                "email": {
+                    "subject": email_data.get("subject"),
+                    "sender": email_data.get("sender"),
+                    "timestamp": invoice_data.get("date")
+                },
+                "invoice": {
+                    "invoice_number": invoice_data.get("invoice_number"),
+                    "paid_amount": invoice_data.get("paid_amount"),
+                    "recipient": invoice_data.get("recipient"),
+                    "date": invoice_data.get("date"),
+                    "due_date": invoice_data.get("due_date"),
+                    "description": invoice_data.get("description")
+                },
+                "payment": {
+                    "success": result.get("success", False),
+                    "amount": invoice_data.get("paid_amount"),
+                    "recipient": invoice_data.get("recipient"),
+                    "reference": result.get("payment_id"),
+                    "error": result.get("error")
+                }
+            }
+            transformed_history.append(transformed_record)
+            
+        return {"payments": transformed_history}
         
     except Exception as e:
-        error = format_error(e)
         raise HTTPException(
             status_code=500,
-            detail=str(error)
+            detail=f"Error reading payment history: {str(e)}"
         )
 
 def main():

@@ -201,23 +201,24 @@ def is_invoice_processed(invoice_number: str, recipient: str) -> bool:
             history = json.load(f)
             
         for payment in history:
-            if (payment.get("invoice_number") == invoice_number and 
-                payment.get("recipient") == recipient and 
-                payment.get("success")):
+            invoice_data = payment.get("invoice_data", {})
+            result = payment.get("result", {})
+            if (invoice_data.get("invoice_number") == invoice_number and 
+                invoice_data.get("recipient") == recipient and 
+                result.get("success")):
                 return True
                 
         return False
         
-    except Exception:
+    except Exception as e:
+        print(f"❌ Error checking payment history: {str(e)}")
         return False
 
 def save_payment_history(email_data: Dict, invoice_data: Dict, result: Dict):
     """Save payment attempt to history."""
     try:
-        # Create history directory if it doesn't exist
         history_dir = Path("invoice data")
         history_dir.mkdir(exist_ok=True)
-        
         history_file = history_dir / "payment_history.json"
         
         # Load existing history
@@ -229,14 +230,32 @@ def save_payment_history(email_data: Dict, invoice_data: Dict, result: Dict):
             except json.JSONDecodeError:
                 history = []
                 
-        # Add new entry
+        # Format the entry with consistent structure
         entry = {
             "timestamp": datetime.now().isoformat(),
-            "invoice_data": invoice_data,
-            "email_data": email_data,
-            "result": result
+            "email_data": {
+                "thread_id": email_data.get("thread_id", ""),
+                "message_id": email_data.get("message_id", ""),
+                "sender": email_data.get("sender", ""),
+                "subject": email_data.get("subject", "")
+            },
+            "invoice_data": {
+                "invoice_number": invoice_data.get("invoice_number", ""),
+                "paid_amount": invoice_data.get("paid_amount", 0.0),
+                "recipient": invoice_data.get("recipient", ""),
+                "date": invoice_data.get("date", ""),
+                "due_date": invoice_data.get("due_date", ""),
+                "description": invoice_data.get("description", "")
+            },
+            "result": {
+                "success": result.get("success", False),
+                "error": result.get("error"),
+                "email_sent": result.get("email_sent", False),
+                "payment_id": result.get("payment_id")
+            }
         }
         
+        # Add new record
         history.append(entry)
         
         # Save updated history
@@ -245,6 +264,7 @@ def save_payment_history(email_data: Dict, invoice_data: Dict, result: Dict):
             
     except Exception as e:
         print(f"❌ Error saving payment history: {str(e)}")
+        traceback.print_exc()
 
 def send_bank_details_request(email_data: Dict, debug: bool = False) -> bool:
     """Send an email requesting bank details from the recipient using LangChain agent."""
@@ -356,169 +376,156 @@ Payment Processing Team"""
         traceback.print_exc()
         return False
 
-def process_payment(invoice_data: Dict, email_data: Dict = None, debug: bool = False) -> Dict:
-    """Process payment for an invoice using Payman."""
+def is_duplicate_invoice(invoice_data: Dict, email_data: Dict) -> Optional[Dict]:
+    """Check if invoice has already been processed or attempted."""
     try:
-        print("\n" + "="*50)
+        history_file = Path("invoice data/payment_history.json")
+        if not history_file.exists():
+            return None
+            
+        with open(history_file, "r") as f:
+            history = json.load(f)
+            
+        # Check for exact matches first
+        for record in history:
+            if (record["email_data"].get("message_id") == email_data.get("message_id") and
+                record["email_data"].get("attachment_id") == email_data.get("attachment_id")):
+                return record
+                
+        # Check for similar invoices (same number, date, amount)
+        for record in history:
+            if (record["invoice_data"].get("invoice_number") == invoice_data.get("invoice_number") and
+                record["invoice_data"].get("date") == invoice_data.get("date") and
+                record["invoice_data"].get("paid_amount") == invoice_data.get("paid_amount") and
+                record["invoice_data"].get("recipient") == invoice_data.get("recipient")):
+                return record
+                
+        return None
+        
+    except Exception as e:
+        print(f"❌ Error checking payment history: {str(e)}")
+        return None
+
+def process_payment(invoice_data: Dict) -> Dict:
+    """Process payment for an invoice.
+    
+    Args:
+        invoice_data (Dict): Invoice data containing payment details
+        
+    Returns:
+        Dict: Processing result
+    """
+    try:
+        print("\n==================================================")
         print("💸 Starting Payment Processing Workflow")
-        print("="*50)
+        print("==================================================\n")
         
-        print("\n📄 Input Data:")
+        print("📄 Input Data:")
         print("-" * 30)
-        print("Invoice Data:")
-        print(json.dumps(invoice_data, indent=2))
-        print("\nEmail Data:")
-        print(json.dumps(email_data, indent=2))
-        print("-" * 30)
+        print(f"Invoice Data:\n{json.dumps(invoice_data, indent=2)}")
+        print("-" * 30 + "\n")
         
-        # Extract payment amount
-        print("\n1️⃣ Extracting Payment Amount")
+        # 1. Check payment history
+        print("1️⃣ Checking Payment History")
+        try:
+            if is_invoice_processed(
+                invoice_number=invoice_data.get("invoice_number"),
+                recipient=invoice_data.get("recipient")
+            ):
+                print("❌ Invoice already processed")
+                return {
+                    "success": False,
+                    "error": "Invoice already processed"
+                }
+        except Exception as e:
+            print(f"❌ Error checking payment history: {str(e)}")
+        print("✅ No previous processing record found\n")
+        
+        # 2. Extract payment amount
+        print("2️⃣ Extracting Payment Amount")
         amount = extract_payment_amount(invoice_data)
         if not amount:
-            print("❌ No valid payment amount found in invoice")
+            error = "No valid payment amount found"
+            print(f"❌ {error}")
             return {
                 "success": False,
-                "error": "No valid payment amount found"
+                "error": error
             }
-        print(f"✅ Payment Amount: ${amount:,.2f}")
+        print(f"✅ Payment amount: ${amount:,.2f}\n")
         
-        # Get recipient
-        print("\n2️⃣ Extracting Recipient")
-        recipient = invoice_data.get("recipient")
-        if not recipient:
-            print("❌ No recipient found in invoice")
-            return {
-                "success": False,
-                "error": "No recipient found"
-            }
-        print(f"✅ Recipient: {recipient}")
-            
-        # Search for payee
-        print(f"\n3️⃣ Searching Payee Database")
-        print(f"🔍 Searching for: {recipient}")
-        payee = search_or_create_payee(recipient)
-        if payee:
-            print(f"✅ Payee Found:")
-            print(json.dumps(payee, indent=2))
-        else:
-            print(f"❌ Payee Not Found")
-            
-            print("\n4️⃣ Bank Details Request Flow")
-            print("-" * 30)
-            
-            if not email_data:
-                print("❌ Cannot request bank details - No email data available")
-                return {
-                    "success": False,
-                    "error": f"Could not find payee: {recipient}. No email data available.",
-                    "email_sent": False
-                }
-                
-            print("📧 Sending bank details request email...")
-            email_sent = send_bank_details_request(email_data, debug=True)
-            
-            print(f"\n📝 Saving to payment history...")
-            failed_result = {
-                "success": False,
-                "error": "Payee not found - Bank details requested",
-                "email_sent": email_sent
-            }
-            save_payment_history(email_data, invoice_data, failed_result)
-            
-            return {
-                "success": False,
-                "error": f"Could not find payee: {recipient}. Bank details request sent.",
-                "email_sent": email_sent
-            }
-            
-        # Check if invoice has already been processed
-        print("\n5️⃣ Checking Previous Processing")
-        invoice_number = invoice_data.get("invoice_number")
-        if invoice_number and is_invoice_processed(invoice_number, recipient):
-            print(f"❌ Invoice {invoice_number} already processed")
-            return {
-                "success": False,
-                "error": f"Invoice {invoice_number} for {recipient} has already been processed"
-            }
-        print("✅ Invoice not previously processed")
-            
-        # Check balance
-        print("\n6️⃣ Checking Available Balance")
+        # 3. Check available balance
+        print("3️⃣ Checking Available Balance")
         balance = check_balance()
-        print(f"Required Amount: ${amount:,.2f}")
-        print(f"Available Balance: ${balance:,.2f}")
-        
-        if amount > balance:
-            print("\n❌ Insufficient Balance")
-            print("-" * 30)
+        if balance < amount:
+            error = f"Insufficient funds (Required: ${amount:,.2f}, Available: ${balance:,.2f})"
+            print(f"❌ {error}")
             
-            print("🔄 Generating checkout URL...")
+            # Generate checkout URL
+            print("\n4️⃣ Generating Checkout URL")
             checkout_url = generate_checkout_url(
                 amount=amount - balance,
-                memo=f"Add funds for payment to {recipient}"
+                memo=f"Add funds for invoice {invoice_data.get('invoice_number', 'Unknown')}"
             )
             
-            if email_data:
-                print("📧 Sending insufficient funds notification...")
-                email_sent = send_bank_details_request(email_data, debug=True)
-                
-                return {
-                    "success": False,
-                    "error": "Insufficient balance",
-                    "checkout_url": checkout_url if checkout_url else None,
-                    "email_sent": email_sent
-                }
-            else:
-                return {
-                    "success": False,
-                    "error": "Insufficient balance",
-                    "checkout_url": checkout_url if checkout_url else None
-                }
+            if checkout_url:
+                print(f"✅ Add funds: {checkout_url}")
             
-        print("✅ Sufficient balance available")
+            return {
+                "success": False,
+                "error": error,
+                "checkout_url": checkout_url
+            }
+        print(f"✅ Sufficient funds available\n")
+        
+        # 4. Find or create payee
+        print("4️⃣ Processing Payee")
+        recipient = invoice_data.get("recipient")
+        if not recipient:
+            error = "No recipient specified"
+            print(f"❌ {error}")
+            return {
+                "success": False,
+                "error": error
+            }
             
-        # Generate reference number
-        print("\n7️⃣ Processing Payment")
-        reference = f"INV-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-        print(f"Payment Reference: {reference}")
-            
-        # Send payment
-        print(f"💸 Sending payment to {recipient}...")
+        payee = search_or_create_payee(recipient)
+        if not payee:
+            error = f"Unable to find or create payee: {recipient}"
+            print(f"❌ {error}")
+            return {
+                "success": False,
+                "error": error
+            }
+        print(f"✅ Found payee: {payee.get('name')}\n")
+        
+        # 5. Send payment
+        print("5️⃣ Sending Payment")
         payment_id = send_payment(
             amount=amount,
             payee_id=payee.get("id"),
-            description=f"Invoice payment (Ref: {reference})"
+            description=f"Invoice {invoice_data.get('invoice_number', 'Unknown')}"
         )
         
-        if payment_id:
-            print(f"\n✅ Payment Successful!")
-            print(f"Payment ID: {payment_id}")
-            result = {
-                "success": True,
-                "payment_id": payment_id,
-                "reference": reference,
-                "amount": amount,
-                "recipient": recipient,
-                "payee_id": payee.get("id")
-            }
-            print("\n📝 Saving to payment history...")
-            save_payment_history(email_data or {}, invoice_data, result)
-            return result
-        else:
-            print("\n❌ Payment Failed - No payment ID returned")
+        if not payment_id:
+            error = "Payment failed"
+            print(f"❌ {error}")
             return {
                 "success": False,
-                "error": "Payment failed - no payment ID returned"
+                "error": error
             }
-            
+        print(f"✅ Payment sent successfully (ID: {payment_id})\n")
+        
+        return {
+            "success": True,
+            "payment_id": payment_id
+        }
+        
     except Exception as e:
-        error_msg = str(e)
-        print(f"\n❌ Error in payment processing: {error_msg}")
-        if debug:
-            traceback.print_exc()
+        error = format_error(e)
+        print(f"❌ Payment processing failed: {error}")
         return {
             "success": False,
-            "error": error_msg
+            "error": str(e)
         }
 
 def main():
@@ -543,7 +550,7 @@ def main():
         }
         
         # Process payment using agent
-        result = process_payment(invoice_data, debug=True)
+        result = process_payment(invoice_data)
         print("\n✅ Agent Response:")
         print(json.dumps(result, indent=2))
                 

@@ -21,22 +21,59 @@ def save_payment_history(payment_data: Dict) -> None:
     Args:
         payment_data (Dict): Payment data to save
     """
-    history_file = "payment_history.json"
+    history_dir = Path("invoice data")
+    history_dir.mkdir(exist_ok=True)
+    history_file = history_dir / "payment_history.json"
     
     # Load existing history
     existing_history = []
-    if os.path.exists(history_file):
+    if history_file.exists():
         try:
             with open(history_file, 'r') as f:
                 existing_history = json.load(f)
         except json.JSONDecodeError:
             existing_history = []
     
-    # Add timestamp to payment data
-    payment_data["timestamp"] = datetime.now().isoformat()
+    # Check for duplicates based on message_id and thread_id
+    email = payment_data.get("email", {})
+    email_data = payment_data.get("email_data", {})
+    message_id = email_data.get("message_id") or email.get("message_id")
+    thread_id = email_data.get("thread_id") or email.get("thread_id")
     
-    # Add new payment to history
-    existing_history.append(payment_data)
+    # Remove any existing entries with the same message_id or thread_id
+    existing_history = [
+        record for record in existing_history 
+        if not (
+            (record.get("email_data", {}).get("message_id") == message_id) or
+            (record.get("email_data", {}).get("thread_id") == thread_id) or
+            (record.get("email", {}).get("message_id") == message_id) or
+            (record.get("email", {}).get("thread_id") == thread_id)
+        )
+    ]
+    
+    # Create unified record structure
+    unified_record = {
+        "timestamp": datetime.now().isoformat(),
+        "email_data": {
+            "thread_id": thread_id,
+            "message_id": message_id,
+            "sender": email_data.get("sender") or email.get("sender"),
+            "subject": email_data.get("subject") or email.get("subject")
+        },
+        "invoice_data": payment_data.get("invoice_data") or payment_data.get("invoice", {}),
+        "result": {
+            "success": (payment_data.get("result", {}).get("success", False) or 
+                       payment_data.get("payment", {}).get("success", False)),
+            "error": (payment_data.get("result", {}).get("error") or 
+                     payment_data.get("payment", {}).get("error")),
+            "email_sent": payment_data.get("result", {}).get("email_sent", False),
+            "payment_id": (payment_data.get("result", {}).get("payment_id") or 
+                         payment_data.get("payment", {}).get("reference"))
+        }
+    }
+    
+    # Add new record
+    existing_history.append(unified_record)
     
     # Save updated history
     with open(history_file, 'w') as f:
@@ -122,14 +159,19 @@ def process_invoice_emails(
                 if not extract_result["success"]:
                     continue
                 
-                # Extract invoice data (mock implementation)
+                # Use extracted payment information
+                payment_info = extract_result.get("payment_info", {})
+                if not payment_info:
+                    continue
+                
+                # Create invoice data from extracted info
                 invoice_data = {
-                    "invoice_number": "INV-2024-001",  # Would be extracted from PDF
-                    "paid_amount": 2500.00,  # Would be extracted from PDF
-                    "recipient": "Slingshot AI",  # Would be extracted from PDF
+                    "invoice_number": payment_info.get("invoice_number") or f"INV-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
+                    "paid_amount": payment_info.get("paid_amount"),
+                    "recipient": payment_info.get("recipient"),
                     "date": email["timestamp"],
-                    "due_date": "2024-02-17",  # Would be extracted from PDF
-                    "description": extract_result["pages"][0]["text"][:100]
+                    "due_date": payment_info.get("due_date"),
+                    "description": payment_info.get("description")
                 }
                 
                 # Process payment
@@ -146,11 +188,7 @@ def process_invoice_emails(
                         "email_data": email_data
                     })
 
-                payment_result = process_payment(
-                    invoice_data,
-                    email_data=email_data,
-                    debug=debug
-                )
+                payment_result = process_payment(invoice_data)
 
                 if debug:
                     debug_print("Payment Response", payment_result)
@@ -161,18 +199,13 @@ def process_invoice_emails(
                 
                 # Create payment history entry
                 payment_history = {
-                    "email": {
-                        "subject": email["subject"],
-                        "sender": email["sender"],
-                        "timestamp": email["timestamp"]
-                    },
-                    "invoice": invoice_data,
-                    "payment": {
+                    "email_data": email_data,
+                    "invoice_data": invoice_data,
+                    "result": {
                         "success": payment_result["success"],
-                        "amount": invoice_data["paid_amount"],
-                        "recipient": invoice_data["recipient"],
-                        "reference": payment_result.get("output", None),
-                        "error": payment_result.get("error", None) if not payment_result["success"] else None
+                        "error": payment_result.get("error"),
+                        "email_sent": False,
+                        "payment_id": payment_result.get("payment_id")
                     }
                 }
                 

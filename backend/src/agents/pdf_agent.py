@@ -6,12 +6,168 @@ import os
 from langchain_community.document_loaders import PyPDFLoader
 import json
 import traceback
+import re
 
 from tools.shared_tools import (
     debug_print,
     format_error,
     ensure_directory
 )
+
+def extract_payment_info(text: str) -> Dict:
+    """Extract payment information from text.
+    
+    Args:
+        text (str): Text to extract from
+        
+    Returns:
+        dict: Extracted payment information
+    """
+    # Remove extra whitespace and normalize
+    text = ' '.join(text.split())
+    
+    # Initialize result
+    result = {
+        "invoice_number": None,
+        "paid_amount": None,
+        "recipient": None,
+        "date": None,
+        "due_date": None,
+        "description": None
+    }
+    
+    # Extract invoice number
+    invoice_patterns = [
+        r'Invoice\s*#?\s*(\w+[-/]?\w+)',
+        r'Invoice Number:?\s*(\w+[-/]?\w+)',
+        r'Invoice ID:?\s*(\w+[-/]?\w+)',
+        r'#\s*(\w+[-/]?\w+)',
+        r'NO\.?\s*(\w+[-/]?\w+)'
+    ]
+    
+    for pattern in invoice_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            result["invoice_number"] = match.group(1)
+            break
+    
+    # Extract amount
+    amount_patterns = [
+        r'Total:?\s*\$?([\d,]+\.?\d*)',
+        r'Amount Due:?\s*\$?([\d,]+\.?\d*)',
+        r'Balance Due:?\s*\$?([\d,]+\.?\d*)',
+        r'Due:?\s*\$?([\d,]+\.?\d*)',
+        r'TOTAL:?\s*\$?([\d,]+\.?\d*)',
+        r'SUBTOTAL:?\s*\$?([\d,]+\.?\d*)',
+        r'\$\s*([\d,]+\.?\d*)'
+    ]
+    
+    for pattern in amount_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            try:
+                amount_str = match.group(1).replace(',', '')
+                result["paid_amount"] = float(amount_str)
+                break
+            except ValueError:
+                continue
+    
+    # Extract recipient
+    recipient_patterns = [
+        r'Bill To:?\s*([^$\n\.]+?)(?=\s*\$|\s*\n|\s*\.|\s*@|$)',
+        r'To:?\s*([^$\n\.]+?)(?=\s*\$|\s*\n|\s*\.|\s*@|$)',
+        r'Recipient:?\s*([^$\n\.]+?)(?=\s*\$|\s*\n|\s*\.|\s*@|$)',
+        r'Company:?\s*([^$\n\.]+?)(?=\s*\$|\s*\n|\s*\.|\s*@|$)',
+        r'Client:?\s*([^$\n\.]+?)(?=\s*\$|\s*\n|\s*\.|\s*@|$)',
+        r'Customer:?\s*([^$\n\.]+?)(?=\s*\$|\s*\n|\s*\.|\s*@|$)'
+    ]
+    
+    # Try to find recipient name
+    recipient_name = None
+    for pattern in recipient_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            recipient_name = match.group(1).strip()
+            # Clean up recipient name
+            recipient_name = re.sub(r'\s+', ' ', recipient_name)
+            recipient_name = re.sub(r'[^\w\s\-\.,]', '', recipient_name)
+            recipient_name = recipient_name.strip()
+            if recipient_name and len(recipient_name) > 2:
+                result["recipient"] = recipient_name
+                break
+    
+    # If no recipient found, try to find a business name
+    if not result["recipient"]:
+        business_patterns = [
+            r'([A-Z][A-Za-z\s\.,]+(?:LLC|Inc|Corp|Ltd|Limited|Company|Co\.))',
+            r'([A-Z][A-Za-z\s\.,]+(?:Technologies|Solutions|Services|Systems))',
+            r'([A-Z][A-Za-z\s\.,]+(?:Group|Partners|Associates))',
+            r'(?:To|For|By):\s*([A-Z][A-Za-z\s\.,]+)',
+            r'(?:Project|Client):\s*([A-Z][A-Za-z\s\.,]+)'
+        ]
+        for pattern in business_patterns:
+            match = re.search(pattern, text)
+            if match:
+                business_name = match.group(1).strip()
+                # Clean up business name
+                business_name = re.sub(r'\s+', ' ', business_name)
+                business_name = re.sub(r'[^\w\s\-\.,]', '', business_name)
+                business_name = business_name.strip()
+                if business_name and len(business_name) > 2:
+                    # Extract just the company name without address
+                    name_parts = business_name.split(',')[0].split('\n')[0].split('@')[0]
+                    result["recipient"] = name_parts.strip()
+                    break
+    
+    # Extract dates
+    date_patterns = [
+        r'Date:?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})',
+        r'Invoice Date:?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})',
+        r'Due Date:?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})',
+        r'(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})'
+    ]
+    
+    for pattern in date_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match and not result["date"]:
+            result["date"] = match.group(1)
+        elif match and not result["due_date"]:
+            result["due_date"] = match.group(1)
+    
+    # Extract description
+    description_patterns = [
+        r'Description:?\s*([^\n]+)',
+        r'Details:?\s*([^\n]+)',
+        r'Services:?\s*([^\n]+)',
+        r'Items:?\s*([^\n]+)',
+        r'Project Details:?\s*([^\n]+)',
+        r'Work Description:?\s*([^\n]+)'
+    ]
+    
+    for pattern in description_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            description = match.group(1).strip()
+            # Clean up description
+            description = re.sub(r'\s+', ' ', description)
+            description = description.strip()
+            if description and len(description) > 2:
+                result["description"] = description
+                break
+    
+    # If no description found, try to find itemized entries
+    if not result["description"]:
+        lines = text.split('\n')
+        items = []
+        for line in lines:
+            if re.search(r'\$\s*[\d,]+\.?\d*', line):  # Line contains a price
+                item = re.sub(r'\$\s*[\d,]+\.?\d*', '', line).strip()
+                if item and len(item) > 2:
+                    items.append(item)
+        if items:
+            result["description"] = "; ".join(items[:3])  # Take first 3 items
+    
+    return result
 
 def extract_text(pdf_path: str, extract_metadata: bool = True, debug: bool = False) -> Dict:
     """Extract text from a PDF file
@@ -50,6 +206,8 @@ def extract_text(pdf_path: str, extract_metadata: bool = True, debug: bool = Fal
         
         # Process pages
         processed_pages = []
+        combined_text = ""
+        
         for page in pages:
             page_data = {
                 "page_number": page.metadata.get("page", 0) + 1,
@@ -58,6 +216,10 @@ def extract_text(pdf_path: str, extract_metadata: bool = True, debug: bool = Fal
             if extract_metadata:
                 page_data["metadata"] = page.metadata
             processed_pages.append(page_data)
+            combined_text += page.page_content + "\n"
+        
+        # Extract payment information
+        payment_info = extract_payment_info(combined_text)
         
         response = {
             "success": True,
@@ -65,14 +227,16 @@ def extract_text(pdf_path: str, extract_metadata: bool = True, debug: bool = Fal
             "file_path": pdf_path,
             "total_pages": len(processed_pages),
             "pages": processed_pages,
-            "file_size": os.path.getsize(pdf_path)
+            "file_size": os.path.getsize(pdf_path),
+            "payment_info": payment_info
         }
         
         if debug:
             debug_print("Extract Success", {
                 "filename": response["filename"],
                 "total_pages": response["total_pages"],
-                "file_size": response["file_size"]
+                "file_size": response["file_size"],
+                "payment_info": payment_info
             })
             
         return response

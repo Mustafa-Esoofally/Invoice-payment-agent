@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 
 interface EmailProfile {
   emailAddress: string;
@@ -216,50 +217,36 @@ export default function Home() {
     <div className="rounded-lg border bg-white shadow-sm">
       <Table>
         <TableHeader>
-          <TableRow className="bg-muted/50 hover:bg-muted/50">
-            <TableHead className="w-[180px] font-semibold">Date</TableHead>
-            <TableHead className="w-[150px] font-semibold">Invoice Number</TableHead>
-            <TableHead className="font-semibold">Recipient</TableHead>
-            <TableHead className="w-[120px] font-semibold text-right">Amount</TableHead>
-            <TableHead className="w-[120px] font-semibold">Status</TableHead>
-            <TableHead className="font-semibold">Reference/Error</TableHead>
+          <TableRow>
+            <TableHead>Date</TableHead>
+            <TableHead>Invoice</TableHead>
+            <TableHead>Recipient</TableHead>
+            <TableHead className="text-right">Amount</TableHead>
+            <TableHead>Status</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {payments.map((payment, index) => (
-            <TableRow key={index} className="hover:bg-muted/30">
-              <TableCell className="whitespace-nowrap font-medium text-gray-600">
-                {new Date(payment.timestamp).toLocaleString(undefined, {
-                  year: 'numeric',
-                  month: 'numeric',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
+            <TableRow key={index}>
+              <TableCell className="font-medium">
+                {new Date(payment.timestamp).toLocaleString()}
               </TableCell>
-              <TableCell className="font-medium text-gray-900">{payment.invoice.invoice_number}</TableCell>
+              <TableCell>{payment.invoice.invoice_number || 'N/A'}</TableCell>
               <TableCell className="font-medium text-gray-900">{payment.invoice.recipient}</TableCell>
               <TableCell className="text-right font-semibold text-gray-900">
-                ${payment.payment.amount.toLocaleString('en-US', {
+                ${payment.invoice.paid_amount?.toLocaleString('en-US', {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2
                 })}
               </TableCell>
               <TableCell>
                 {payment.payment.success ? (
-                  <span className="inline-flex items-center px-2.5 py-1.5 rounded-full text-sm font-medium bg-green-50 text-green-700 border border-green-100">
-                    <CheckCircle2 className="h-4 w-4 mr-1.5" />
-                    Success
-                  </span>
+                  <Badge variant="success">Success</Badge>
                 ) : (
-                  <span className="inline-flex items-center px-2.5 py-1.5 rounded-full text-sm font-medium bg-red-50 text-red-700 border border-red-100">
-                    <XCircle className="h-4 w-4 mr-1.5" />
-                    Failed
-                  </span>
+                  <Badge variant="destructive">
+                    {payment.payment.error || 'Failed'}
+                  </Badge>
                 )}
-              </TableCell>
-              <TableCell className="max-w-md truncate text-gray-600">
-                {payment.payment.success ? payment.payment.reference : payment.payment.error}
               </TableCell>
             </TableRow>
           ))}
