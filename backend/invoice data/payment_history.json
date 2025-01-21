@@ -1,0 +1,222 @@
+[
+  {
+    "timestamp": "2025-01-21T11:48:27.733742",
+    "invoice_data": {
+      "invoice_number": "INV-2024-001",
+      "paid_amount": 2500.0,
+      "recipient": "Slingshot AI",
+      "date": "2025-01-15 15:57:09",
+      "due_date": "2024-02-17",
+      "description": " \n \n \n \n \n \nINVOICE \n \n \n \n \nASMA PROFESSIONAL SRVCS                                                "
+    },
+    "email_data": {
+      "thread_id": "1946aaf0de7d93b8",
+      "message_id": "1946aaf0de7d93b8",
+      "sender": "mustafa esoofally <coolmusta@gmail.com>",
+      "subject": "Invoice"
+    },
+    "result": {
+      "success": false,
+      "error": "Payee not found - Bank details requested",
+      "email_sent": true
+    }
+  },
+  {
+    "timestamp": "2025-01-21T11:48:32.556774",
+    "invoice_data": {
+      "invoice_number": "INV-2024-001",
+      "paid_amount": 2500.0,
+      "recipient": "Slingshot AI",
+      "date": "2025-01-20 23:04:02",
+      "due_date": "2024-02-17",
+      "description": "Item\nLogo\nDate: 02 June, 2030\nINVOICE\nNO. 000001YOUR\nLOGO\nOlivia Wilson\n123 Anywhere St., Any City\nh"
+    },
+    "email_data": {
+      "thread_id": "19485f5b96fcafe4",
+      "message_id": "19485f5b96fcafe4",
+      "sender": "mustafa esoofally <coolmusta@gmail.com>",
+      "subject": "Invoice 1/20/2025"
+    },
+    "result": {
+      "success": false,
+      "error": "Payee not found - Bank details requested",
+      "email_sent": true
+    }
+  },
+  {
+    "timestamp": "2025-01-21T11:52:31.745381",
+    "invoice_data": {
+      "invoice_number": "INV-2024-001",
+      "paid_amount": 2500.0,
+      "recipient": "Slingshot AI",
+      "date": "2025-01-20 23:04:02",
+      "due_date": "2024-02-17",
+      "description": "Item\nLogo\nDate: 02 June, 2030\nINVOICE\nNO. 000001YOUR\nLOGO\nOlivia Wilson\n123 Anywhere St., Any City\nh"
+    },
+    "email_data": {
+      "thread_id": "19485f5b96fcafe4",
+      "message_id": "19485f5b96fcafe4",
+      "sender": "mustafa esoofally <coolmusta@gmail.com>",
+      "subject": "Invoice 1/20/2025"
+    },
+    "result": {
+      "success": false,
+      "error": "Payee not found - Bank details requested",
+      "email_sent": true
+    }
+  },
+  {
+    "timestamp": "2025-01-21T11:52:36.836021",
+    "invoice_data": {
+      "invoice_number": "INV-2024-001",
+      "paid_amount": 2500.0,
+      "recipient": "Slingshot AI",
+      "date": "2025-01-15 15:57:09",
+      "due_date": "2024-02-17",
+      "description": " \n \n \n \n \n \nINVOICE \n \n \n \n \nASMA PROFESSIONAL SRVCS                                                "
+    },
+    "email_data": {
+      "thread_id": "1946aaf0de7d93b8",
+      "message_id": "1946aaf0de7d93b8",
+      "sender": "mustafa esoofally <coolmusta@gmail.com>",
+      "subject": "Invoice"
+    },
+    "result": {
+      "success": false,
+      "error": "Payee not found - Bank details requested",
+      "email_sent": true
+    }
+  },
+  {
+    "timestamp": "2025-01-21T11:53:42.063865",
+    "invoice_data": {
+      "invoice_number": "INV-2024-001",
+      "paid_amount": 2500.0,
+      "recipient": "Slingshot AI",
+      "date": "2025-01-15 15:57:09",
+      "due_date": "2024-02-17",
+      "description": " \n \n \n \n \n \nINVOICE \n \n \n \n \nASMA PROFESSIONAL SRVCS                                                "
+    },
+    "email_data": {
+      "thread_id": "1946aaf0de7d93b8",
+      "message_id": "1946aaf0de7d93b8",
+      "sender": "mustafa esoofally <coolmusta@gmail.com>",
+      "subject": "Invoice"
+    },
+    "result": {
+      "success": false,
+      "error": "Payee not found - Bank details requested",
+      "email_sent": true
+    }
+  },
+  {
+    "timestamp": "2025-01-21T11:53:46.643757",
+    "invoice_data": {
+      "invoice_number": "INV-2024-001",
+      "paid_amount": 2500.0,
+      "recipient": "Slingshot AI",
+      "date": "2025-01-20 23:04:02",
+      "due_date": "2024-02-17",
+      "description": "Item\nLogo\nDate: 02 June, 2030\nINVOICE\nNO. 000001YOUR\nLOGO\nOlivia Wilson\n123 Anywhere St., Any City\nh"
+    },
+    "email_data": {
+      "thread_id": "19485f5b96fcafe4",
+      "message_id": "19485f5b96fcafe4",
+      "sender": "mustafa esoofally <coolmusta@gmail.com>",
+      "subject": "Invoice 1/20/2025"
+    },
+    "result": {
+      "success": false,
+      "error": "Payee not found - Bank details requested",
+      "email_sent": true
+    }
+  },
+  {
+    "timestamp": "2025-01-21T11:56:22.982338",
+    "invoice_data": {
+      "invoice_number": "INV-2024-001",
+      "paid_amount": 2500.0,
+      "recipient": "Slingshot AI",
+      "date": "2025-01-20 23:04:02",
+      "due_date": "2024-02-17",
+      "description": "Item\nLogo\nDate: 02 June, 2030\nINVOICE\nNO. 000001YOUR\nLOGO\nOlivia Wilson\n123 Anywhere St., Any City\nh"
+    },
+    "email_data": {
+      "thread_id": "19485f5b96fcafe4",
+      "message_id": "19485f5b96fcafe4",
+      "sender": "mustafa esoofally <coolmusta@gmail.com>",
+      "subject": "Invoice 1/20/2025"
+    },
+    "result": {
+      "success": false,
+      "error": "Payee not found - Bank details requested",
+      "email_sent": true
+    }
+  },
+  {
+    "timestamp": "2025-01-21T11:56:27.668973",
+    "invoice_data": {
+      "invoice_number": "INV-2024-001",
+      "paid_amount": 2500.0,
+      "recipient": "Slingshot AI",
+      "date": "2025-01-15 15:57:09",
+      "due_date": "2024-02-17",
+      "description": " \n \n \n \n \n \nINVOICE \n \n \n \n \nASMA PROFESSIONAL SRVCS                                                "
+    },
+    "email_data": {
+      "thread_id": "1946aaf0de7d93b8",
+      "message_id": "1946aaf0de7d93b8",
+      "sender": "mustafa esoofally <coolmusta@gmail.com>",
+      "subject": "Invoice"
+    },
+    "result": {
+      "success": false,
+      "error": "Payee not found - Bank details requested",
+      "email_sent": true
+    }
+  },
+  {
+    "timestamp": "2025-01-21T12:00:22.422018",
+    "invoice_data": {
+      "invoice_number": "INV-2024-001",
+      "paid_amount": 2500.0,
+      "recipient": "Slingshot AI",
+      "date": "2025-01-15 15:57:09",
+      "due_date": "2024-02-17",
+      "description": " \n \n \n \n \n \nINVOICE \n \n \n \n \nASMA PROFESSIONAL SRVCS                                                "
+    },
+    "email_data": {
+      "thread_id": "1946aaf0de7d93b8",
+      "message_id": "1946aaf0de7d93b8",
+      "sender": "mustafa esoofally <coolmusta@gmail.com>",
+      "subject": "Invoice"
+    },
+    "result": {
+      "success": false,
+      "error": "Payee not found - Bank details requested",
+      "email_sent": true
+    }
+  },
+  {
+    "timestamp": "2025-01-21T12:00:29.154019",
+    "invoice_data": {
+      "invoice_number": "INV-2024-001",
+      "paid_amount": 2500.0,
+      "recipient": "Slingshot AI",
+      "date": "2025-01-20 23:04:02",
+      "due_date": "2024-02-17",
+      "description": "Item\nLogo\nDate: 02 June, 2030\nINVOICE\nNO. 000001YOUR\nLOGO\nOlivia Wilson\n123 Anywhere St., Any City\nh"
+    },
+    "email_data": {
+      "thread_id": "19485f5b96fcafe4",
+      "message_id": "19485f5b96fcafe4",
+      "sender": "mustafa esoofally <coolmusta@gmail.com>",
+      "subject": "Invoice 1/20/2025"
+    },
+    "result": {
+      "success": false,
+      "error": "Payee not found - Bank details requested",
+      "email_sent": true
+    }
+  }
+]

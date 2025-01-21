@@ -35,7 +35,7 @@ class ProcessRequest(BaseModel):
     composio_account_id: str
     query: Optional[str] = "subject:invoice has:attachment newer_than:7d"
     max_results: Optional[int] = 10
-    download_dir: Optional[str] = "downloads"
+    download_dir: Optional[str] = "invoice data/email_attachments"
     debug: Optional[bool] = False
 
 @app.post("/process-invoices")
@@ -92,7 +92,7 @@ async def get_payment_history() -> Dict[str, List]:
         Dict[str, List]: List of payment records
     """
     try:
-        history_file = os.path.join("payment_history", "payment_history.json")
+        history_file = "payment_history.json"
         if not os.path.exists(history_file):
             return {"payments": []}
             

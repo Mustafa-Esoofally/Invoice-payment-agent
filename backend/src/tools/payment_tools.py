@@ -15,7 +15,7 @@ load_dotenv()
 # Initialize Payman client
 client = Paymanai(
     x_payman_api_secret=os.getenv("PAYMAN_API_SECRET"),
-    base_url=os.getenv("PAYMAN_BASE_URL")
+    environment="sandbox"
 )
 
 # Type definitions

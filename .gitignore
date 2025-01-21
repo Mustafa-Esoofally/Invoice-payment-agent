@@ -177,3 +177,7 @@ package-lock.json
 reference/
 
 frontend/package-lock.json
+
+# invoice data
+backend/invoice data/email_attachments/
+

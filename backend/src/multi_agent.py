@@ -21,8 +21,7 @@ def save_payment_history(payment_data: Dict) -> None:
     Args:
         payment_data (Dict): Payment data to save
     """
-    history_dir = ensure_directory("payment_history")
-    history_file = os.path.join(history_dir, "payment_history.json")
+    history_file = "payment_history.json"
     
     # Load existing history
     existing_history = []
@@ -46,7 +45,7 @@ def save_payment_history(payment_data: Dict) -> None:
 def process_invoice_emails(
     query: str = "subject:invoice has:attachment newer_than:7d",
     max_results: int = 10,
-    download_dir: str = "downloads",
+    download_dir: str = "invoice data/email_attachments",
     debug: bool = False
 ) -> Dict:
     """Process invoice emails with PDF attachments
@@ -64,11 +63,26 @@ def process_invoice_emails(
         if debug:
             debug_print("Process Request", {
                 "query": query,
-                "max_results": max_results
+                "max_results": max_results,
+                "download_dir": download_dir
             })
         
-        # Ensure download directory exists
+        # Ensure base invoice data directory exists
+        invoice_data_dir = ensure_directory("invoice data")
+        
+        # Ensure email attachments directory exists and create date-based subdirectory
+        base_dir = ensure_directory(download_dir)
+        today = datetime.now().strftime("%Y-%m-%d")
+        download_dir = os.path.join(base_dir, today)
         download_dir = ensure_directory(download_dir)
+        
+        if debug:
+            debug_print("Download Directory", {
+                "invoice_data_dir": invoice_data_dir,
+                "attachments_dir": base_dir,
+                "date_dir": today,
+                "full_path": download_dir
+            })
         
         # Fetch emails with attachments
         fetch_result = fetch_emails(
@@ -119,10 +133,27 @@ def process_invoice_emails(
                 }
                 
                 # Process payment
+                email_data = {
+                    "thread_id": email["thread_id"],
+                    "message_id": email["message_id"],
+                    "sender": email["sender"],
+                    "subject": email["subject"]
+                }
+
+                if debug:
+                    debug_print("Payment Request", {
+                        "invoice_data": invoice_data,
+                        "email_data": email_data
+                    })
+
                 payment_result = process_payment(
                     invoice_data,
+                    email_data=email_data,
                     debug=debug
                 )
+
+                if debug:
+                    debug_print("Payment Response", payment_result)
                 
                 # Add success flag if not present
                 if "success" not in payment_result:
