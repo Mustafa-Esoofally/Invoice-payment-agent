@@ -1,6 +1,44 @@
 [
   {
-    "timestamp": "2025-01-22T15:09:06.882224",
+    "timestamp": "2025-01-22T17:06:31.938310",
+    "email_data": {
+      "thread_id": "1948f72fb9f2a36f",
+      "message_id": "1948f72fb9f2a36f",
+      "sender": "mustafa esoofally <coolmusta@gmail.com>",
+      "subject": "test invoice"
+    },
+    "invoice_data": {
+      "invoice_number": "123456",
+      "paid_amount": 2250,
+      "recipient": "Claudia",
+      "date": "2025-01-22 19:17:31",
+      "due_date": "",
+      "description": "Payment for Social Media Post and Copywriting",
+      "bank_details": {
+        "type": "US_ACH",
+        "account_holder_name": "Claudia",
+        "account_number": "123-456-7890",
+        "account_type": "",
+        "routing_number": "",
+        "bank_name": "Fauget"
+      },
+      "email_data": {
+        "thread_id": "1948f72fb9f2a36f",
+        "message_id": "1948f72fb9f2a36f",
+        "sender": "mustafa esoofally <coolmusta@gmail.com>",
+        "subject": "test invoice"
+      }
+    },
+    "result": {
+      "success": false,
+      "error": "Bank details and payee information required",
+      "error_type": "validation_error",
+      "email_sent": false,
+      "payment_id": null
+    }
+  },
+  {
+    "timestamp": "2025-01-22T17:06:47.814311",
     "email_data": {
       "thread_id": "1948f835e803e37c",
       "message_id": "1948f835e803e37c",
@@ -38,7 +76,7 @@
     }
   },
   {
-    "timestamp": "2025-01-22T15:09:21.488166",
+    "timestamp": "2025-01-22T17:06:59.564756",
     "email_data": {
       "thread_id": "1948f5b8ccf92ea8",
       "message_id": "1948f5b8ccf92ea8",
@@ -61,49 +99,11 @@
       }
     },
     "result": {
-      "success": false,
-      "error": "Invoice was already processed",
-      "error_type": "other",
+      "success": true,
+      "error": null,
+      "error_type": "none",
       "email_sent": false,
-      "payment_id": null
-    }
-  },
-  {
-    "timestamp": "2025-01-22T15:09:32.138821",
-    "email_data": {
-      "thread_id": "1948f72fb9f2a36f",
-      "message_id": "1948f72fb9f2a36f",
-      "sender": "mustafa esoofally <coolmusta@gmail.com>",
-      "subject": "test invoice"
-    },
-    "invoice_data": {
-      "invoice_number": "123456",
-      "paid_amount": 2250,
-      "recipient": "Claudia",
-      "date": "2025-01-22 19:17:31",
-      "due_date": "",
-      "description": "Payment for Social Media Post and Copywriting",
-      "bank_details": {
-        "type": "US_ACH",
-        "account_holder_name": "Claudia",
-        "account_number": "123-456-7890",
-        "account_type": "",
-        "routing_number": "",
-        "bank_name": "Fauget"
-      },
-      "email_data": {
-        "thread_id": "1948f72fb9f2a36f",
-        "message_id": "1948f72fb9f2a36f",
-        "sender": "mustafa esoofally <coolmusta@gmail.com>",
-        "subject": "test invoice"
-      }
-    },
-    "result": {
-      "success": false,
-      "error": "Bank details and payee information required",
-      "error_type": "validation_error",
-      "email_sent": false,
-      "payment_id": null
+      "payment_id": "1efd90d3-3e9b-6507-8984-b5d895abc373"
     }
   }
 ]

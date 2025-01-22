@@ -86,10 +86,10 @@ def save_payment_history(payment_data: Dict) -> None:
                 filename = os.path.basename(src_path)
                 dst_path = os.path.join("invoice data", "processed", filename)
                 os.rename(src_path, dst_path)
-                print(f"✅ Moved processed PDF to: {dst_path}")
+                print(f"[SYSTEM] ✅ Processed PDF moved to: {dst_path}")
                 
     except Exception as e:
-        print(f"❌ Error saving payment history: {str(e)}")
+        print(f"[SYSTEM] ❌ Error saving payment history: {str(e)}")
 
 def categorize_error(payment_data: Dict) -> str:
     """Categorize the type of error in payment processing.
@@ -123,24 +123,25 @@ def print_extracted_data(payment_info: Dict, debug: bool = False) -> None:
         payment_info (Dict): Extracted payment information
         debug (bool): Enable debug output
     """
-    print("\n📄 Extracted Invoice Data:")
+    print("\n[INVOICE] �� Extracted Data:")
     print("=" * 50)
     
-    # Basic Invoice Info
-    print("\n📋 Basic Information:")
-    print(f"Invoice Number: {payment_info.get('invoice_number', 'Not found')}")
-    print(f"Amount: ${payment_info.get('paid_amount', 0):,.2f}")
-    print(f"Date: {payment_info.get('date', 'Not found')}")
-    print(f"Due Date: {payment_info.get('due_date', 'Not specified')}")
-    print(f"Description: {payment_info.get('description', 'Not found')}")
+    print("\n[INVOICE] 📋 Basic Information:")
+    print(f"  • Invoice Number: {payment_info.get('invoice_number', 'Not found')}")
+    print(f"  • Amount: ${payment_info.get('paid_amount', 0):,.2f}")
+    print(f"  • Date: {payment_info.get('date', 'Not found')}")
+    print(f"  • Due Date: {payment_info.get('due_date', 'Not specified')}")
+    print(f"  • Description: {payment_info.get('description', 'Not found')}")
+    
+    print("\n[INVOICE] 👤 Recipient Information:")
+    print(f"  • Name: {payment_info.get('recipient_name', 'Not found')}")
+    print(f"  • Email: {payment_info.get('recipient_email', 'Not found')}")
+    print(f"  • Phone: {payment_info.get('recipient_phone', 'Not found')}")
+    print(f"  • Address: {payment_info.get('recipient_address', 'Not found')}")
     
     # Recipient Info
-    print("\n👤 Recipient Information:")
-    print(f"Name: {payment_info.get('recipient', 'Not found')}")
-    
-    # Bank Details
-    bank_details = payment_info.get('bank_details', {})
     print("\n🏦 Bank Details:")
+    bank_details = payment_info.get('bank_details', {})
     print(f"Bank Name: {bank_details.get('bank_name', 'Not found')}")
     print(f"Account Type: {bank_details.get('type', 'Not found')}")
     print(f"Account Holder: {bank_details.get('account_holder_name', 'Not found')}")
@@ -316,7 +317,7 @@ async def process_invoice_emails(
                     }
                 }
                 
-                print("\n💳 Processing payment...")
+                print("\n�� Processing payment...")
                 print(f"Invoice: {invoice_data['invoice_number']}")
                 print(f"Amount: {invoice_data['paid_amount']}")
                 print(f"Recipient: {invoice_data['recipient']}")
