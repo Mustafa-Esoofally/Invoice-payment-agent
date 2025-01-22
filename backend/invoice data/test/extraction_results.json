@@ -1,0 +1,410 @@
+{
+  "timestamp": "2025-01-22T11:00:56.187794",
+  "total_files": 10,
+  "successful": 0,
+  "results": [
+    {
+      "filename": "Black And Gray Minimal Freelancer Invoice.pdf",
+      "timestamp": "2025-01-22T10:59:23.603890",
+      "duration": 9.97,
+      "extraction": {
+        "payee": {
+          "name": "Olivia Wilson",
+          "contact_type": "individual",
+          "email": "hello@reallygreatsite.com",
+          "phone": "",
+          "address": "123 Anywhere St., Any City",
+          "tax_id": ""
+        },
+        "payment": {
+          "amount": 755,
+          "currency": "USD",
+          "description": "Payment for Logo, Banner (2x6m), Poster (1x2m)"
+        },
+        "invoice": {
+          "number": "000001",
+          "date": "2030-06-02",
+          "due_date": ""
+        },
+        "customer": {
+          "name": "Studio Shodwe",
+          "email": "hello@reallygreatsite.com",
+          "phone": "",
+          "address": "123 Anywhere St., Any City"
+        }
+      },
+      "issues": [
+        "Missing due date"
+      ]
+    },
+    {
+      "filename": "Black White Minimalist Modern Business Invoice.pdf",
+      "timestamp": "2025-01-22T10:59:35.028818",
+      "duration": 11.41,
+      "extraction": {
+        "payee": {
+          "name": "Hannah Morales",
+          "contact_type": "individual",
+          "email": "hello@reallygreatsite.com",
+          "phone": "+123-456-7890",
+          "address": "",
+          "tax_id": ""
+        },
+        "bank_details": {
+          "type": "US_ACH",
+          "account_holder_name": "Hannah Morales",
+          "account_number": "012345678901",
+          "account_type": "",
+          "routing_number": "",
+          "bank_name": "Rimberio"
+        },
+        "payment": {
+          "amount": 2310,
+          "currency": "USD",
+          "description": "Photography service, Videography service, Video editing, Transportation fee"
+        },
+        "invoice": {
+          "number": "01234",
+          "date": "2030-08-20",
+          "due_date": ""
+        },
+        "customer": {
+          "name": "Harper Russo",
+          "email": "",
+          "phone": "",
+          "address": ""
+        }
+      },
+      "issues": [
+        "Missing account type (checking/savings)",
+        "Missing due date"
+      ]
+    },
+    {
+      "filename": "Black White Minimalist Simple Creative Freelancer Invoice.pdf",
+      "timestamp": "2025-01-22T10:59:42.825727",
+      "duration": 7.77,
+      "extraction": {
+        "payee": {
+          "name": "Avery Davis",
+          "contact_type": "individual",
+          "email": "hello@reallygreatsite.com",
+          "phone": "123-456-7890",
+          "address": "123 Anywhere St., Any City",
+          "tax_id": ""
+        },
+        "bank_details": {
+          "type": "US_ACH",
+          "account_holder_name": "John Smith",
+          "account_number": "0000 0000",
+          "account_type": "checking",
+          "routing_number": "000-000",
+          "bank_name": "Really Great BankBank"
+        },
+        "payment": {
+          "amount": 875,
+          "currency": "USD",
+          "description": "Payment for services rendered"
+        },
+        "invoice": {
+          "number": "1024",
+          "date": "",
+          "due_date": ""
+        },
+        "customer": {
+          "name": "Really Great Company",
+          "email": "",
+          "phone": "",
+          "address": ""
+        }
+      },
+      "issues": [
+        "Missing due date"
+      ]
+    },
+    {
+      "filename": "Blue and Yellow Geometric Invoice.pdf",
+      "timestamp": "2025-01-22T10:59:52.863482",
+      "duration": 10.01,
+      "extraction": {
+        "payee": {
+          "name": "Studio Shodwe Architecture",
+          "contact_type": "business",
+          "address": "123 Anywhere St., Any City, ST 12345"
+        },
+        "bank_details": {
+          "type": "US_ACH",
+          "account_holder_name": "Morgan Maxwell",
+          "account_number": "012345678901",
+          "bank_name": "Warner & Spencer"
+        },
+        "payment": {
+          "amount": 55650,
+          "currency": "USD",
+          "description": "Design Services"
+        },
+        "invoice": {
+          "number": "INV-01234",
+          "date": "2023-04-22",
+          "due_date": "2023-05-22"
+        },
+        "customer": {
+          "name": "HANOVER & TYKE"
+        }
+      },
+      "issues": [
+        "Missing contact method (email or phone)",
+        "Missing account type (checking/savings)"
+      ]
+    },
+    {
+      "filename": "Fashion Invoice.pdf",
+      "timestamp": "2025-01-22T11:00:02.516688",
+      "duration": 9.63,
+      "extraction": {
+        "payee": {
+          "name": "Samira Hadid",
+          "contact_type": "individual",
+          "email": "",
+          "phone": "",
+          "address": "123 Anywhere St., Any City, ST 12345",
+          "tax_id": ""
+        },
+        "bank_details": {
+          "type": "US_ACH",
+          "account_holder_name": "Samira Hadid",
+          "account_number": "123-456-7890",
+          "account_type": "",
+          "routing_number": "",
+          "bank_name": "Briard Bank"
+        },
+        "payment": {
+          "amount": 500,
+          "currency": "USD",
+          "description": "Payment for Eggshell Camisole Top, Cuban Collar Shirt, Floral Cotton Dress"
+        },
+        "invoice": {
+          "number": "12345",
+          "date": "2025-06-16",
+          "due_date": "2025-07-05"
+        },
+        "customer": {
+          "name": "Imani Olowe",
+          "email": "",
+          "phone": "+123-456-7890",
+          "address": "63 Ivy Road, Hawkville, GA, USA 31036"
+        }
+      },
+      "issues": [
+        "Missing contact method (email or phone)",
+        "Missing account type (checking/savings)"
+      ]
+    },
+    {
+      "filename": "Simple Minimalist Aesthetic Business Invoice .pdf",
+      "timestamp": "2025-01-22T11:00:18.607140",
+      "duration": 16.07,
+      "extraction": {
+        "payee": {
+          "name": "Liceria & Co.",
+          "contact_type": "business",
+          "address": "123 Anywhere St., Any City",
+          "email": "",
+          "phone": "",
+          "tax_id": ""
+        },
+        "bank_details": {
+          "type": "US_ACH",
+          "account_holder_name": "Liceria & Co.",
+          "account_number": "0123 4567 8901",
+          "account_type": "",
+          "routing_number": "",
+          "bank_name": "Borcele Bank"
+        },
+        "payment": {
+          "amount": 550,
+          "currency": "USD",
+          "description": "Payment for brand manual, logo design, website design, social media template, consultation"
+        },
+        "invoice": {
+          "number": "01234",
+          "date": "2030-02-11",
+          "due_date": "2030-03-11"
+        },
+        "customer": {
+          "name": "Jonathan Patterson",
+          "email": "",
+          "phone": "",
+          "address": ""
+        }
+      },
+      "issues": [
+        "Missing contact method (email or phone)",
+        "Missing account type (checking/savings)"
+      ]
+    },
+    {
+      "filename": "Simple Minimalist Business Invoice.pdf",
+      "timestamp": "2025-01-22T11:00:29.255375",
+      "duration": 10.63,
+      "extraction": {
+        "payee": {
+          "name": "AdelinePalmerston",
+          "contact_type": "individual",
+          "email": "",
+          "phone": "",
+          "address": "",
+          "tax_id": ""
+        },
+        "bank_details": {
+          "type": "US_ACH",
+          "account_holder_name": "Adeline Palmerston",
+          "account_number": "0123 4567 8901",
+          "account_type": "",
+          "routing_number": "",
+          "bank_name": "Borcele Bank"
+        },
+        "payment": {
+          "amount": 440,
+          "currency": "USD",
+          "description": "Payment for logo design, brand consultation, website design, social media templates, brand photography, brand guide"
+        },
+        "invoice": {
+          "number": "01234",
+          "date": "2030-02-11",
+          "due_date": "2030-03-11"
+        },
+        "customer": {
+          "name": "Richard Sanchez",
+          "email": "",
+          "phone": "",
+          "address": "123 Anywhere St., Any City"
+        }
+      },
+      "issues": [
+        "Missing contact method (email or phone)",
+        "Missing account type (checking/savings)"
+      ]
+    },
+    {
+      "filename": "White and Black Simple Invoice Letterhead.pdf",
+      "timestamp": "2025-01-22T11:00:35.663341",
+      "duration": 6.39,
+      "extraction": {
+        "payee": {
+          "name": "RIMBERIO INC.",
+          "contact_type": "business",
+          "email": "",
+          "phone": "",
+          "address": "",
+          "tax_id": ""
+        },
+        "payment": {
+          "amount": 180,
+          "currency": "USD",
+          "description": "Notes"
+        },
+        "invoice": {
+          "number": "001",
+          "date": "2022-07-29",
+          "due_date": "2022-06-27"
+        },
+        "customer": {
+          "name": "AVERY DAVIS",
+          "email": "",
+          "phone": "",
+          "address": ""
+        }
+      },
+      "issues": [
+        "Missing contact method (email or phone)"
+      ]
+    },
+    {
+      "filename": "White Minimalist Business Invoice.pdf",
+      "timestamp": "2025-01-22T11:00:45.328380",
+      "duration": 9.64,
+      "extraction": {
+        "payee": {
+          "name": "Claudia",
+          "contact_type": "individual",
+          "email": "",
+          "phone": "",
+          "address": "",
+          "tax_id": ""
+        },
+        "bank_details": {
+          "type": "US_ACH",
+          "account_holder_name": "Claudia",
+          "account_number": "123-456-7890",
+          "account_type": "",
+          "routing_number": "",
+          "bank_name": "Fauget"
+        },
+        "payment": {
+          "amount": 2250,
+          "currency": "USD",
+          "description": "Payment for Social Media Post and Copywriting"
+        },
+        "invoice": {
+          "number": "123456",
+          "date": "2022-04-01",
+          "due_date": ""
+        },
+        "customer": {
+          "name": "Alfredo Torres",
+          "email": "",
+          "phone": "",
+          "address": "123 Anywhere St., Any City, ST 12345"
+        }
+      },
+      "issues": [
+        "Missing contact method (email or phone)",
+        "Missing account type (checking/savings)",
+        "Missing due date"
+      ]
+    },
+    {
+      "filename": "White Simple Invoice.pdf",
+      "timestamp": "2025-01-22T11:00:56.185488",
+      "duration": 10.71,
+      "extraction": {
+        "payee": {
+          "name": "Olivia Wilson",
+          "contact_type": "individual",
+          "email": "hello@reallygreatsite.com",
+          "phone": "+123-456-7890",
+          "address": "123 Anywhere St., Any City, ST 12345",
+          "tax_id": ""
+        },
+        "bank_details": {
+          "type": "US_ACH",
+          "account_holder_name": "Olivia Wilson",
+          "account_number": "0123 4567 8901",
+          "account_type": "checking",
+          "routing_number": "",
+          "bank_name": ""
+        },
+        "payment": {
+          "amount": 1900,
+          "currency": "USD",
+          "description": "Payment for Logo Design, Brochure Design, Advertising Design, Content Writer, Poster Design"
+        },
+        "invoice": {
+          "number": "00000001",
+          "date": "2025-10-12",
+          "due_date": ""
+        },
+        "customer": {
+          "name": "Liceria & Co.",
+          "email": "",
+          "phone": "",
+          "address": "123 Anywhere St., Any City, ST 12345"
+        }
+      },
+      "issues": [
+        "Missing due date"
+      ]
+    }
+  ]
+}
