@@ -1,6 +1,5 @@
 from langchain.agents import create_openai_functions_agent, AgentExecutor
 from langchain import hub
-from langchain_openai import ChatOpenAI
 from composio_langchain import ComposioToolSet
 from pathlib import Path
 import os
@@ -12,6 +11,8 @@ import traceback
 import composio
 import base64
 from datetime import datetime
+
+from src.openai_client import get_openai_client
 
 # Initialize Composio toolset with API key
 COMPOSIO_API_KEY = "ixbtlkivtqk45d0qf2epa5"  # Your provided API key
@@ -106,8 +107,8 @@ class AttachmentAgent:
                         'size': os.path.getsize(target_path)
                     }
                     
-                    if self.debug:
-                        debug_print("Download Success", result)
+                    # if self.debug:
+                    #     debug_print("Download Success", result)
                     
                     return result
                     

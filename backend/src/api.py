@@ -6,13 +6,23 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 import json
+from datetime import datetime
 from dotenv import load_dotenv
+import traceback
 
-from multi_agent import process_invoice_emails
-from tools.shared_tools import format_error, ensure_directory
+from src.multi_agent import process_invoice_emails
+from src.tools.shared_tools import format_error, ensure_directory
+from src.composio_client import init_composio
 
 # Load environment variables
 load_dotenv()
+
+print("\n🚀 Starting Invoice Payment Agent API")
+print("=" * 50)
+
+# Initialize Composio client
+init_composio()
+print("✅ Composio client initialized")
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -39,42 +49,37 @@ class ProcessRequest(BaseModel):
     debug: Optional[bool] = False
 
 @app.post("/process-invoices")
-async def process_invoices(request: ProcessRequest) -> Dict:
-    """Process invoice emails and make payments.
-    
-    Args:
-        request (ProcessRequest): Processing request parameters
-        
-    Returns:
-        dict: Processing results
-    """
+async def process_invoices(request: ProcessRequest):
+    """Process invoice emails endpoint."""
     try:
-        # Set Composio account ID in environment
-        os.environ["COMPOSIO_ACCOUNT_ID"] = request.composio_account_id
+        print(f"\n📨 Processing Invoice Request at {datetime.now().isoformat()}")
+        print("=" * 50)
+        print(f"🔍 Query: {request.query}")
+        print(f"📊 Max Results: {request.max_results}")
+        print(f"📁 Download Dir: {request.download_dir}")
+        print(f"🔧 Debug Mode: {request.debug}")
+        print(f"🔑 Using Composio Account: {request.composio_account_id}")
+        
+        print("\n⚙️ Starting Invoice Processing...")
         
         # Process invoices
-        result = process_invoice_emails(
+        result = await process_invoice_emails(
             query=request.query,
             max_results=request.max_results,
             download_dir=request.download_dir,
             debug=request.debug
         )
         
-        # Check if result has error
-        if not result.get("success", False):
-            raise HTTPException(
-                status_code=400,
-                detail=result.get("error", "Unknown error occurred")
-            )
-        
         return result
         
     except Exception as e:
-        error = format_error(e)
-        raise HTTPException(
-            status_code=500,
-            detail=str(error)
-        )
+        print(f"\n❌ API Error: {str(e)}")
+        traceback.print_exc()
+        return {
+            "success": False,
+            "error": str(e),
+            "type": type(e).__name__
+        }
 
 @app.get("/health")
 async def health_check() -> Dict:

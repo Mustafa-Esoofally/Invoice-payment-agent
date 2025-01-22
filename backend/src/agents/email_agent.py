@@ -1,17 +1,18 @@
-"""Email agent for handling Gmail interactions and attachments."""
+"""Email agent for fetching and processing invoice emails."""
 
 from typing import Dict, List, Optional
-from pathlib import Path
 import os
+from datetime import datetime
+import mimetypes
 
-from tools.shared_tools import (
+from src.tools.shared_tools import (
     debug_print,
     format_error,
     get_safe_filename,
     format_timestamp,
     ensure_directory
 )
-from composio_client import get_tool
+from src.composio_client import get_tool
 
 # Initialize Gmail tools globally
 FETCH_TOOL = get_tool('GMAIL_FETCH_EMAILS')
@@ -82,8 +83,8 @@ def fetch_emails(
             "emails": processed_emails
         }
         
-        if debug:
-            debug_print("Fetched Emails", response)
+        # if debug:
+        #     debug_print("Fetched Emails", response)
             
         return response
         
@@ -113,12 +114,12 @@ def download_attachment(
         dict: Download result with file info
     """
     try:
-        if debug:
-            debug_print("Download Request", {
-                "message_id": message_id,
-                "attachment_id": attachment_id,
-                "filename": filename
-            })
+        # if debug:
+        #     debug_print("Download Request", {
+        #         "message_id": message_id,
+        #         "attachment_id": attachment_id,
+        #         "filename": filename
+        #     })
         
         # Ensure download directory exists
         download_dir = ensure_directory(download_dir)
@@ -149,8 +150,8 @@ def download_attachment(
                     'size': os.path.getsize(target_path)
                 }
                 
-                if debug:
-                    debug_print("Download Success", response)
+                # if debug:
+                #     debug_print("Download Success", response)
                     
                 return response
                 

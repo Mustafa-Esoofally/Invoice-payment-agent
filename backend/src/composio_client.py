@@ -11,6 +11,40 @@ load_dotenv()
 
 # Global cache for tools
 _tools_cache: Dict[str, List] = {}
+_composio_client: Optional[ComposioToolSet] = None
+
+def init_composio(debug: bool = False) -> None:
+    """Initialize Composio client with API key
+    
+    Args:
+        debug (bool): Enable debug output
+    """
+    global _composio_client
+    
+    try:
+        # Get API key
+        api_key = get_api_key(debug=debug)
+        
+        # Initialize client
+        _composio_client = ComposioToolSet(api_key=api_key)
+        
+        # Test connection by getting basic tools
+        tools = _composio_client.get_tools(actions=['GMAIL_FETCH_EMAILS'])
+        
+        if debug:
+            debug_print("Composio Client Initialized", {
+                "api_key_exists": bool(api_key),
+                "client_initialized": bool(_composio_client),
+                "test_tools": len(tools)
+            })
+            
+        print("Composio API Key present: ✓")
+        
+    except Exception as e:
+        error_msg = f"Failed to initialize Composio client: {str(e)}"
+        if debug:
+            debug_print("Initialization Error", error_msg)
+        raise RuntimeError(error_msg)
 
 def debug_print(title: str, data: any, indent: int = 2) -> None:
     """Print debug information in a structured format
@@ -64,6 +98,8 @@ def get_tools(actions: Optional[List[str]] = None, debug: bool = False, **kwargs
         List: List of tools for the specified actions
     """
     try:
+        global _composio_client
+        
         # Create a cache key from the actions and kwargs
         cache_key = str(sorted(actions or [])) + str(sorted(kwargs.items()))
         
@@ -76,12 +112,12 @@ def get_tools(actions: Optional[List[str]] = None, debug: bool = False, **kwargs
                 })
             return _tools_cache[cache_key]
         
-        # Initialize Composio with API key
-        api_key = get_api_key(debug=debug)
-        composio = ComposioToolSet(api_key=api_key)
+        # Initialize client if not already initialized
+        if not _composio_client:
+            init_composio(debug=debug)
         
         # Get and cache the tools
-        tools = composio.get_tools(actions=actions, **kwargs)
+        tools = _composio_client.get_tools(actions=actions, **kwargs)
         _tools_cache[cache_key] = tools
         
         if debug:

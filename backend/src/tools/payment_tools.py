@@ -8,6 +8,7 @@ import json
 from dotenv import load_dotenv
 from paymanai import Paymanai
 from functools import wraps
+import traceback
 
 # Load environment variables
 load_dotenv()
@@ -122,49 +123,105 @@ class BalanceTool(BaseTool):
         return f"Current balance: ${float(balance):.2f}"
 
 class SearchPayeesTool(BaseTool):
+    """Tool for searching payment destinations."""
+    
     name: str = "search_payees"
-    description: str = "Search for payment destinations by name. Input should be the name to search for."
+    description: str = "Search for payment destinations by name or email"
     
     @safe_api_call
-    def _run(self, query: str, **kwargs: Any) -> str:
+    def _run(self, tool_input: str) -> str:
         """Search for payment destinations."""
-        print(f"🔍 Searching for payee: {query}")
-        response = client.payments.search_payees(name=query, type="US_ACH")
-        payees = handle_api_response(response)
-        
-        if not payees:
-            return f"No payees found matching '{query}'"
-        
-        formatted_payees = []
-        for payee in payees[:5]:  # Limit to 5 results
-            payee_data = handle_api_response(payee)
-            if not payee_data:
-                continue
+        try:
+            # Parse search parameters
+            params = json.loads(tool_input)
             
-            name = handle_api_response(payee_data, 'name') or 'Unknown'
-            payee_id = handle_api_response(payee_data, 'id') or 'Unknown'
+            print("\n🔍 Payman API Search Request:")
+            print("-" * 30)
+            print(json.dumps(params, indent=2))
             
-            if name != 'Unknown' and payee_id != 'Unknown':
-                formatted_payees.append(f"- {name} (ID: {payee_id})")
-        
-        return "\n".join(formatted_payees) if formatted_payees else f"No valid payees found matching '{query}'"
+            # Call Payman API
+            response = client.payments.search_payees(
+                name=params.get("name"),
+                contact_email=params.get("contact_email"),
+                type=params.get("type", "US_ACH")
+            )
+            
+            # Parse the response if it's a string
+            if isinstance(response, str):
+                try:
+                    payees = json.loads(response)
+                except json.JSONDecodeError:
+                    print("\n❌ Failed to parse Payman API response")
+                    return json.dumps([])
+            else:
+                payees = response
+            
+            # Log search results
+            if payees:
+                print(f"\n✅ Found {len(payees)} payees in Payman")
+                for idx, payee in enumerate(payees[:3], 1):  # Show first 3 payees
+                    print(f"\nPayee {idx}:")
+                    print(f"- Name: {payee.get('name', 'Unknown')}")
+                    print(f"- ID: {payee.get('id', 'Unknown')}")
+            else:
+                print("\n⚠️ No payees found in Payman")
+            
+            return json.dumps(payees)
+            
+        except Exception as e:
+            print(f"\n❌ Payman API Error:")
+            print(f"Error Type: {type(e).__name__}")
+            print(f"Error Message: {str(e)}")
+            traceback.print_exc()
+            return json.dumps([])
+    
+    def _arun(self, tool_input: str) -> str:
+        """Async version of run."""
+        raise NotImplementedError("SearchPayeesTool does not support async")
 
 class SendPaymentTool(BaseTool):
     name: str = "send_payment"
     description: str = "Send a payment to a destination. Requires amount (float), destination_id (str), and optional memo (str)."
-    args_schema: type[SendPaymentSchema] = SendPaymentSchema
     
     @safe_api_call
-    def _run(self, amount: float, destination_id: str, memo: Optional[str] = None, **kwargs: Any) -> str:
+    def _run(self, tool_input: str) -> str:
         """Send a payment to a destination."""
-        print(f"💸 Processing payment: ${amount:.2f} to {destination_id}")
-        payment = client.payments.send_payment(
-            amount_decimal=amount,
-            payment_destination_id=destination_id,
-            memo=memo
-        )
-        ref = handle_api_response(payment, 'reference') or 'Unknown'
-        return f"✅ Payment sent successfully! Reference: {ref}"
+        try:
+            # Parse payment parameters
+            params = json.loads(tool_input)
+            
+            print(f"\n💸 Sending payment via Payman API:")
+            print("-" * 30)
+            print(json.dumps(params, indent=2))
+            
+            # Send payment using Payman client
+            payment = client.payments.send_payment(
+                amount_decimal=float(params["amount"]),
+                payment_destination_id=params["destination_id"],
+                memo=params.get("memo")
+            )
+            
+            # Handle response
+            if isinstance(payment, str):
+                try:
+                    payment = json.loads(payment)
+                except json.JSONDecodeError:
+                    print("\n❌ Failed to parse Payman API response")
+                    return "❌ Payment failed: Invalid API response"
+            
+            # Extract reference
+            ref = handle_api_response(payment, 'reference') or 'Unknown'
+            print(f"\n✅ Payment sent successfully!")
+            print(f"Reference: {ref}")
+            
+            return f"✅ Payment sent successfully! Reference: {ref}"
+            
+        except Exception as e:
+            print(f"\n❌ Payment Error:")
+            print(f"Error Type: {type(e).__name__}")
+            print(f"Error Message: {str(e)}")
+            traceback.print_exc()
+            return f"❌ Payment failed: {str(e)}"
 
 class BatchPaymentsTool(BaseTool):
     name: str = "process_batch_payments"
