@@ -1,7 +1,6 @@
 """Script to extract payment information from PDF invoices."""
 
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 import json
 from pathlib import Path
@@ -10,37 +9,15 @@ import time
 import os
 from dotenv import load_dotenv
 import sys
-    
 
-def check_api_key():
-    """Verify OpenAI API key is properly set."""
-    # Load environment variables from .env file
-    load_dotenv(override=True)
-    
-    # Check for API key
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        print("❌ Error: OPENAI_API_KEY environment variable is not set")
-        print("Please set your OpenAI API key in the .env file:")
-        print("OPENAI_API_KEY=your-api-key-here")
-        sys.exit(1)
-        
-    if not api_key.startswith('sk-'):
-        print("❌ Error: Invalid OpenAI API key format")
-        sys.exit(1)
-        
-    return api_key
+from src.openai_client import get_openai_client
 
 class PaymentExtractor:
     """Extract and validate payment information from invoices."""
     
-    def __init__(self, api_key: str = None):
-        """Initialize with API key."""
-        self.llm = ChatOpenAI(
-            temperature=0,
-            model="gpt-4",
-            api_key=api_key  # Explicitly pass the API key
-        )
+    def __init__(self):
+        """Initialize with OpenAI client."""
+        self.llm = get_openai_client()
     
     def extract(self, text: str) -> dict:
         """Extract payment details from invoice text."""
@@ -193,31 +170,23 @@ class PaymentExtractor:
 
 def process_pdfs(directory: str):
     """Process all PDFs in directory for payment information."""
-    # Verify API key first
-    try:
-        api_key = check_api_key()
-        print("✅ API key validation successful")
-    except Exception as e:
-        print(f"❌ API key validation failed: {str(e)}")
-        return
-    
     test_dir = Path(directory)
     if not test_dir.exists():
-        print("❌ Test directory not found")
+        print("Test directory not found")
         return
     
     pdf_files = list(test_dir.glob("*.pdf"))
     if not pdf_files:
-        print("❌ No PDF files found")
+        print("No PDF files found")
         return
     
-    print(f"\n🔍 Found {len(pdf_files)} PDF files")
+    print(f"Found {len(pdf_files)} PDF files")
     
-    extractor = PaymentExtractor(api_key)
+    extractor = PaymentExtractor()
     results = []
     
     for i, pdf_path in enumerate(pdf_files, 1):
-        print(f"\n📄 Processing {i}/{len(pdf_files)}: {pdf_path.name}")
+        print(f"\nProcessing {i}/{len(pdf_files)}: {pdf_path.name}")
         print("-" * 50)
         
         try:
@@ -232,47 +201,21 @@ def process_pdfs(directory: str):
             duration = time.time() - start_time
             
             if "error" in data:
-                print(f"⚠️ {data['error']}")
+                print(f"Error: {data['error']}")
                 continue
             
-            # Print extraction summary
-            print("\n📋 Extracted Information:")
-            print(f"  • Payee: {data['payee']['name']} ({data['payee'].get('contact_type', 'unknown')})")
-            print(f"  • Amount: ${data['payment']['amount']} {data['payment'].get('currency', 'USD')}")
-            print(f"  • Invoice: {data['invoice']['number']}")
-            if data['invoice'].get('due_date'):
-                print(f"  • Due Date: {data['invoice']['due_date']}")
-            
-            # Print bank details if available
-            if data.get('bank_details'):
-                print("\n🏦 Bank Information:")
-                bank = data['bank_details']
-                print(f"  • Account Holder: {bank.get('account_holder_name', 'N/A')}")
-                print(f"  • Account Type: {bank.get('account_type', 'N/A')}")
-                print(f"  • Account Number: {bank.get('account_number', 'N/A')}")
-                if bank.get('routing_number'):
-                    print(f"  • Routing Number: {bank['routing_number']}")
-                if bank.get('bank_name'):
-                    print(f"  • Bank Name: {bank['bank_name']}")
-            
-            # Print contact details if available
-            if any([data['payee'].get('email'), data['payee'].get('phone'), data['payee'].get('address')]):
-                print("\n📞 Contact Information:")
-                if data['payee'].get('email'):
-                    print(f"  • Email: {data['payee']['email']}")
-                if data['payee'].get('phone'):
-                    print(f"  • Phone: {data['payee']['phone']}")
-                if data['payee'].get('address'):
-                    print(f"  • Address: {data['payee']['address']}")
+            # Print minimal extraction summary
+            print("\nExtracted Information:")
+            print(f"Payee: {data['payee']['name']}")
+            print(f"Amount: ${data['payment']['amount']} {data['payment'].get('currency', 'USD')}")
+            print(f"Invoice: {data['invoice']['number']}")
             
             # Validate
             issues = extractor.validate(data)
             if issues:
-                print("\n⚠️ Validation Issues:")
+                print("\nValidation Issues:")
                 for issue in issues:
-                    print(f"  • {issue}")
-            else:
-                print("\n✅ Validation passed")
+                    print(f"- {issue}")
             
             # Store result
             results.append({
@@ -284,7 +227,7 @@ def process_pdfs(directory: str):
             })
             
         except Exception as e:
-            print(f"❌ Error: {str(e)}")
+            print(f"Error: {str(e)}")
     
     # Save results
     if results:
@@ -297,11 +240,11 @@ def process_pdfs(directory: str):
                     "successful": len([r for r in results if not r.get("issues")]),
                     "results": results
                 }, f, indent=2, ensure_ascii=False)
-            print(f"\n💾 Results saved to: {output_file}")
+            print(f"\nResults saved to: {output_file}")
         except Exception as e:
-            print(f"\n❌ Failed to save results: {str(e)}")
+            print(f"\nFailed to save results: {str(e)}")
     else:
-        print("\n⚠️ No successful extractions to save")
+        print("\nNo successful extractions to save")
 
 if __name__ == "__main__":
     process_pdfs("invoice data/test") 

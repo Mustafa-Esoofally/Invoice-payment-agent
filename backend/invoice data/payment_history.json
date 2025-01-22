@@ -1,46 +1,107 @@
 [
   {
-    "timestamp": "2025-01-21T13:21:32.394911",
+    "timestamp": "2025-01-22T15:09:06.882224",
     "email_data": {
-      "thread_id": "1946aaf0de7d93b8",
-      "message_id": "1946aaf0de7d93b8",
+      "thread_id": "1948f835e803e37c",
+      "message_id": "1948f835e803e37c",
       "sender": "mustafa esoofally <coolmusta@gmail.com>",
-      "subject": "Invoice"
+      "subject": "Simple minimalist invoice"
     },
     "invoice_data": {
-      "invoice_number": "ASMA",
-      "paid_amount": 2500.0,
-      "recipient": "PROJECT DETAILS Daniel Reid Cahn Slingshot AI daniel",
-      "date": "2025-01-15 15:57:09",
-      "due_date": null,
-      "description": "HOURS RATE TOTAL Software Development (09/09/24 \u2013 09/13/24) 30 50 1500.00 Software Development (09/16/24 \u2013 09/20/24) 20 50 1000.00 Remarks / Payment Instructions: Check mailed to the billing address Balance Due $2500.00 SUBTOTAL 2500.00 TOTAL TAX 0.00"
+      "invoice_number": "01234",
+      "paid_amount": 550,
+      "recipient": "Liceria & Co.",
+      "date": "2025-01-22 19:35:25",
+      "due_date": "2030-03-11",
+      "description": "Payment for brand manual, logo design, website design, social media template, consultation",
+      "bank_details": {
+        "type": "US_ACH",
+        "account_holder_name": "Liceria & Co.",
+        "account_number": "0123 4567 8901",
+        "account_type": "",
+        "routing_number": "",
+        "bank_name": "Borcele Bank"
+      },
+      "email_data": {
+        "thread_id": "1948f835e803e37c",
+        "message_id": "1948f835e803e37c",
+        "sender": "mustafa esoofally <coolmusta@gmail.com>",
+        "subject": "Simple minimalist invoice"
+      }
     },
     "result": {
       "success": false,
-      "error": "Insufficient funds (Required: $2,500.00, Available: $1,000.00)",
+      "error": "Bank details and payee information required",
+      "error_type": "validation_error",
       "email_sent": false,
       "payment_id": null
     }
   },
   {
-    "timestamp": "2025-01-21T13:21:34.515722",
+    "timestamp": "2025-01-22T15:09:21.488166",
     "email_data": {
-      "thread_id": "19485f5b96fcafe4",
-      "message_id": "19485f5b96fcafe4",
+      "thread_id": "1948f5b8ccf92ea8",
+      "message_id": "1948f5b8ccf92ea8",
       "sender": "mustafa esoofally <coolmusta@gmail.com>",
-      "subject": "Invoice 1/20/2025"
+      "subject": "Minimal Invoice"
     },
     "invoice_data": {
-      "invoice_number": "NO",
-      "paid_amount": 500.0,
-      "recipient": "From Studio Shodwe 123 Anywhere St",
-      "date": "2025-01-20 23:04:02",
-      "due_date": null,
-      "description": "Item Logo Date: 02 June, 2030 INVOICE NO. 000001YOUR LOGO Olivia Wilson 123 Anywhere St., Any City hello@reallygreatsite.com Billed to: From: Studio Shodwe 123 Anywhere St., Any City hello@reallygreatsite.com Quantity Price Amount 1   Banner (2x6m) 2   Poster (1x2m) 3   Total Payment method: Note: Cash Thank you for choosing us!"
+      "invoice_number": "000001",
+      "paid_amount": 755,
+      "recipient": "Olivia Wilson",
+      "date": "2025-01-22 18:51:56",
+      "due_date": "",
+      "description": "Payment for Logo, Banner (2x6m), Poster (1x2m)",
+      "bank_details": {},
+      "email_data": {
+        "thread_id": "1948f5b8ccf92ea8",
+        "message_id": "1948f5b8ccf92ea8",
+        "sender": "mustafa esoofally <coolmusta@gmail.com>",
+        "subject": "Minimal Invoice"
+      }
     },
     "result": {
       "success": false,
-      "error": "Unable to find or create payee: From Studio Shodwe 123 Anywhere St",
+      "error": "Invoice was already processed",
+      "error_type": "other",
+      "email_sent": false,
+      "payment_id": null
+    }
+  },
+  {
+    "timestamp": "2025-01-22T15:09:32.138821",
+    "email_data": {
+      "thread_id": "1948f72fb9f2a36f",
+      "message_id": "1948f72fb9f2a36f",
+      "sender": "mustafa esoofally <coolmusta@gmail.com>",
+      "subject": "test invoice"
+    },
+    "invoice_data": {
+      "invoice_number": "123456",
+      "paid_amount": 2250,
+      "recipient": "Claudia",
+      "date": "2025-01-22 19:17:31",
+      "due_date": "",
+      "description": "Payment for Social Media Post and Copywriting",
+      "bank_details": {
+        "type": "US_ACH",
+        "account_holder_name": "Claudia",
+        "account_number": "123-456-7890",
+        "account_type": "",
+        "routing_number": "",
+        "bank_name": "Fauget"
+      },
+      "email_data": {
+        "thread_id": "1948f72fb9f2a36f",
+        "message_id": "1948f72fb9f2a36f",
+        "sender": "mustafa esoofally <coolmusta@gmail.com>",
+        "subject": "test invoice"
+      }
+    },
+    "result": {
+      "success": false,
+      "error": "Bank details and payee information required",
+      "error_type": "validation_error",
       "email_sent": false,
       "payment_id": null
     }

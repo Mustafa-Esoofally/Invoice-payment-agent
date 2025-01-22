@@ -97,8 +97,8 @@ class AttachmentAgent:
                         'size': os.path.getsize(target_path)
                     }
                     
-                    if self.debug:
-                        debug_print("Download Success", result)
+                    # if self.debug:
+                    #     debug_print("Download Success", result)
                     
                     return result
                     
