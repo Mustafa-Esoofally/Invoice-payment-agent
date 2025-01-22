@@ -6,20 +6,18 @@ import traceback
 from pathlib import Path
 import os
 from datetime import datetime
+from dotenv import load_dotenv
 
-def debug_print(title: str, data: any, indent: int = 2) -> None:
-    """Print debug information in a structured format
-    
-    Args:
-        title (str): Title of the debug message
-        data (any): Data to print
-        indent (int): Indentation level for JSON formatting
-    """
-    print(f"\n🔍 {title}")
-    if isinstance(data, (dict, list)):
-        print(json.dumps(data, indent=indent, default=str))
-    else:
-        print(data)
+# Load environment variables
+load_dotenv()
+
+# Get debug mode from environment
+DEBUG = os.getenv("DEBUG", "FALSE").upper() == "TRUE"
+
+def debug_print(*args: Any, **kwargs: Any) -> None:
+    """Enhanced debug print function with timestamp and formatting"""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"\n[{timestamp}] 🔍 DEBUG:", *args, **kwargs)
     print("-" * 50)
 
 def format_error(error: Exception, include_traceback: bool = True) -> Dict:
@@ -108,4 +106,14 @@ def format_currency(amount: float, currency: str = "USD") -> str:
     """
     if currency == "USD":
         return f"${amount:,.2f}"
-    return f"{amount:,.2f} {currency}" 
+    return f"{amount:,.2f} {currency}"
+
+__all__ = [
+    'DEBUG',
+    'debug_print',
+    'format_error',
+    'get_safe_filename',
+    'format_timestamp',
+    'ensure_directory',
+    'format_currency'
+] 

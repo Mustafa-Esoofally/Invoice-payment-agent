@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from paymanai import Paymanai
 from functools import wraps
 import traceback
+import requests
 
 # Load environment variables
 load_dotenv()
@@ -135,8 +136,8 @@ class SearchPayeesTool(BaseTool):
             # Parse search parameters
             params = json.loads(tool_input)
             
-            print("\n🔍 Payman API Search Request:")
-            print("-" * 30)
+            print("\n[PAYMAN] �� Search Request:")
+            print("-" * 40)
             print(json.dumps(params, indent=2))
             
             # Call Payman API
@@ -151,28 +152,27 @@ class SearchPayeesTool(BaseTool):
                 try:
                     payees = json.loads(response)
                 except json.JSONDecodeError:
-                    print("\n❌ Failed to parse Payman API response")
+                    print("\n[PAYMAN] ❌ Failed to parse API response - Invalid JSON")
                     return json.dumps([])
             else:
                 payees = response
             
             # Log search results
             if payees:
-                print(f"\n✅ Found {len(payees)} payees in Payman")
+                print(f"\n[PAYMAN] ✅ Found {len(payees)} payees in Payman")
                 for idx, payee in enumerate(payees[:3], 1):  # Show first 3 payees
-                    print(f"\nPayee {idx}:")
-                    print(f"- Name: {payee.get('name', 'Unknown')}")
-                    print(f"- ID: {payee.get('id', 'Unknown')}")
+                    print(f"\n[PAYMAN] 👤 Payee {idx}:")
+                    print(f"  • Name: {payee.get('name', 'Unknown')}")
+                    print(f"  • ID: {payee.get('id', 'Unknown')}")
             else:
-                print("\n⚠️ No payees found in Payman")
+                print("\n[PAYMAN] ⚠️ No payees found in Payman")
             
             return json.dumps(payees)
             
         except Exception as e:
-            print(f"\n❌ Payman API Error:")
-            print(f"Error Type: {type(e).__name__}")
-            print(f"Error Message: {str(e)}")
-            traceback.print_exc()
+            print(f"\n[PAYMAN] ❌ API Error:")
+            print(f"  • Type: {type(e).__name__}")
+            print(f"  • Details: {str(e)}")
             return json.dumps([])
     
     def _arun(self, tool_input: str) -> str:
@@ -190,8 +190,8 @@ class SendPaymentTool(BaseTool):
             # Parse payment parameters
             params = json.loads(tool_input)
             
-            print(f"\n💸 Sending payment via Payman API:")
-            print("-" * 30)
+            print(f"\n[PAYMAN] 💸 Processing payment request:")
+            print("-" * 40)
             print(json.dumps(params, indent=2))
             
             # Send payment using Payman client
@@ -206,21 +206,20 @@ class SendPaymentTool(BaseTool):
                 try:
                     payment = json.loads(payment)
                 except json.JSONDecodeError:
-                    print("\n❌ Failed to parse Payman API response")
+                    print("\n[PAYMAN] ❌ Failed to parse API response - Invalid JSON")
                     return "❌ Payment failed: Invalid API response"
             
             # Extract reference
             ref = handle_api_response(payment, 'reference') or 'Unknown'
-            print(f"\n✅ Payment sent successfully!")
-            print(f"Reference: {ref}")
+            print(f"\n[PAYMAN] ✅ Payment processed successfully")
+            print(f"  • Reference: {ref}")
             
             return f"✅ Payment sent successfully! Reference: {ref}"
             
         except Exception as e:
-            print(f"\n❌ Payment Error:")
-            print(f"Error Type: {type(e).__name__}")
-            print(f"Error Message: {str(e)}")
-            traceback.print_exc()
+            print(f"\n[PAYMAN] ❌ Payment Error:")
+            print(f"  • Type: {type(e).__name__}")
+            print(f"  • Details: {str(e)}")
             return f"❌ Payment failed: {str(e)}"
 
 class BatchPaymentsTool(BaseTool):
@@ -239,14 +238,16 @@ class BatchPaymentsTool(BaseTool):
         if balance < total_amount:
             return f"❌ Error: Insufficient funds. Required: ${total_amount:.2f}, Available: ${balance:.2f}"
         
-        print(f"\n📦 Processing batch of {len(payments)} payments")
-        print(f"💰 Total amount: ${total_amount:.2f}")
+        print(f"\n[PAYMAN] 📦 Processing batch payment:")
+        print(f"  • Number of payments: {len(payments)}")
+        print(f"  • Total amount: ${total_amount:.2f}")
         
         for payment in payments:
             try:
-                print(f"\n📝 Processing payment {payment.id}:")
-                print(f"👤 Recipient: {payment.recipientName}")
-                print(f"💵 Amount: ${payment.amount:.2f} {payment.currency}")
+                print(f"\n[PAYMAN] 📝 Processing individual payment:")
+                print(f"  • ID: {payment.id}")
+                print(f"  • Recipient: {payment.recipientName}")
+                print(f"  • Amount: ${payment.amount:.2f} {payment.currency}")
                 
                 # Search for payee
                 response = client.payments.search_payees(
@@ -290,7 +291,7 @@ class BatchPaymentsTool(BaseTool):
                     ))
                     continue
                 
-                print(f"🎯 Found payee ID: {payee_id}")
+                print(f"[PAYMAN] 🎯 Found payee ID: {payee_id}")
                 
                 # Send payment
                 result = client.payments.send_payment(
@@ -307,7 +308,7 @@ class BatchPaymentsTool(BaseTool):
                     status='success',
                     reference=ref
                 ))
-                print("✅ Payment processed successfully")
+                print("[PAYMAN] ✅ Payment completed successfully")
             
             except Exception as e:
                 results.append(PaymentResult(
@@ -333,7 +334,7 @@ class CheckoutUrlTool(BaseTool):
     @safe_api_call
     def _run(self, amount: float, currency: str = "USD", memo: Optional[str] = None, customer_name: Optional[str] = None, **kwargs: Any) -> str:
         """Generate a checkout URL for adding funds."""
-        print(f"🔗 Generating checkout URL for ${amount:.2f}")
+        print(f"[PAYMAN] 🔗 Generating checkout URL for ${amount:.2f}")
         response = client.payments.initiate_customer_deposit(
             amount_decimal=amount,
             customer_id="default",

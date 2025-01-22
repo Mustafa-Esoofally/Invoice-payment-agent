@@ -3,12 +3,14 @@ from pathlib import Path
 import os
 import shutil
 from typing import Dict, List, Optional
+import json
+from datetime import datetime
 
 def debug_print(title: str, data: any, indent: int = 2):
-    """Helper function to print debug information"""
-    print(f"\n🔍 DEBUG: {title}")
+    """Print debug information with consistent formatting"""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"\n[{timestamp}] [ATTACHMENT] {title}:")
     if isinstance(data, (dict, list)):
-        import json
         print(json.dumps(data, indent=indent, default=str))
     else:
         print(data)
@@ -59,7 +61,7 @@ class AttachmentAgent:
                     "filename": filename
                 })
             
-            print(f"Downloading attachment: {filename}")
+            print(f"\n[ATTACHMENT] 📥 Downloading: {filename}")
             
             # Prepare API request
             params = {
@@ -145,6 +147,7 @@ class AttachmentAgent:
                 debug_print("Multiple Download Request", attachments)
             
             results = []
+            print("\n[ATTACHMENT] 📥 Processing attachments...")
             for attachment in attachments:
                 result = self.download_attachment(
                     message_id=attachment['message_id'],
@@ -210,13 +213,15 @@ def main():
     
     # Print results
     for result in results:
-        if result['success']:
-            print(f"\n✅ Downloaded: {result['original_name']}")
-            print(f"Saved as: {result['file_path']}")
-            print(f"Size: {result['size']} bytes")
+        if result.get('success', False):
+            print(f"\n[ATTACHMENT] ✅ Downloaded successfully:")
+            print(f"  • Original name: {result['original_name']}")
+            print(f"  • Saved as: {result['file_path']}")
+            print(f"  • Size: {result['size']} bytes")
         else:
-            print(f"\n❌ Failed to download {result['filename']}")
-            print(f"Error: {result['error']}")
+            print(f"\n[ATTACHMENT] ❌ Download failed:")
+            print(f"  • Filename: {result['filename']}")
+            print(f"  • Error: {result['error']}")
 
 if __name__ == "__main__":
     main() 

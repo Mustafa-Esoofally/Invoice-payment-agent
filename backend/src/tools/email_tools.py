@@ -19,12 +19,14 @@ COMPOSIO_API_KEY = "ixbtlkivtqk45d0qf2epa5"  # Your provided API key
 composio_tools = ComposioToolSet(api_key=COMPOSIO_API_KEY)
 
 def debug_print(title: str, data: any, indent: int = 2):
-    """Print debug information."""
-    print(f"\n{title}:")
+    """Print debug information with consistent formatting"""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"\n[{timestamp}] [EMAIL] {title}:")
     if isinstance(data, (dict, list)):
-        print(json.dumps(data, indent=indent))
+        print(json.dumps(data, indent=indent, default=str))
     else:
         print(data)
+    print("-" * 50)
 
 class AttachmentAgent:
     def __init__(self, download_dir: str = "downloads", debug: bool = False):
@@ -233,7 +235,7 @@ class GmailAgent:
             }
             
             if self.debug:
-                print("\n🔍 Gmail Reply Parameters:")
+                print("\n[EMAIL] 🔍 Gmail Reply Parameters:")
                 print(f"Thread ID: {thread_id}")
                 print(f"Recipient: {recipient_email}")
                 print(f"Is HTML: {is_html}")
@@ -242,7 +244,7 @@ class GmailAgent:
             response = self.gmail_tool.run(params)
             
             if self.debug:
-                print("\n📤 Gmail API Response:")
+                print("\n[EMAIL] 📤 Gmail API Response:")
                 print(json.dumps(response, indent=2))
             
             return {
@@ -254,7 +256,7 @@ class GmailAgent:
         except Exception as e:
             error_msg = str(e)
             if self.debug:
-                print(f"\n❌ Gmail Reply Error: {error_msg}")
+                print(f"\n[EMAIL] ❌ Gmail Reply Error: {error_msg}")
                 traceback.print_exc()
             return {
                 "success": False,
@@ -275,18 +277,20 @@ def main():
     ]
     
     # Download attachments
-    print("\nDownloading attachments...")
+    print("\n[EMAIL] 📥 Downloading attachments...")
     results = agent.download_multiple_attachments(attachments)
     
     # Print results
     for result in results:
         if result['success']:
-            print(f"\n✅ Downloaded: {result['original_name']}")
-            print(f"Saved as: {result['file_path']}")
-            print(f"Size: {result['size']} bytes")
+            print(f"\n[EMAIL] ✅ Downloaded successfully:")
+            print(f"  • Original name: {result['original_name']}")
+            print(f"  • Saved as: {result['file_path']}")
+            print(f"  • Size: {result['size']} bytes")
         else:
-            print(f"\n❌ Failed to download {result['filename']}")
-            print(f"Error: {result['error']}")
+            print(f"\n[EMAIL] ❌ Download failed:")
+            print(f"  • Filename: {result['filename']}")
+            print(f"  • Error: {result['error']}")
 
 if __name__ == "__main__":
     main() 
