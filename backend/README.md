@@ -1,198 +1,173 @@
-# Invoice Payment Agent
+# Invoice Payment Agent Backend
 
-An automated system that processes invoice payments by fetching emails with PDF attachments, extracting invoice information, and processing payments.
+An intelligent multi-agent system that automates invoice processing and payments using AI. The system processes emails with PDF invoices, extracts information using Composio AI, and handles payments through secure payment gateways.
 
 ## Features
 
-- 📧 **Email Integration**: Automatically fetches emails with attachments
-- 📎 **Attachment Handling**: Downloads and processes PDF attachments
-- 📄 **PDF Processing**: Extracts text and structured data from PDF invoices
-- 💰 **Payment Processing**: Processes payments based on extracted invoice data
-- 🤖 **Multi-Agent System**: Coordinates between different specialized agents
-- 🔍 **Flexible Extraction**: Handles various invoice formats and layouts
+- 📧 **Email Integration**: Automatically fetches and processes emails with invoice attachments
+- 📎 **PDF Processing**: Downloads and stores PDF attachments securely
+- 🤖 **AI-Powered Extraction**: Uses Composio AI for accurate invoice data extraction
+- 💰 **Payment Processing**: Automates payment processing with validation
+- 📊 **History Tracking**: Maintains detailed payment and processing history
+- 🔒 **Security**: Implements secure credential management and data handling
 
-## System Components
+## System Architecture
 
-1. **Email Agent** (`email_agent.py`)
-   - Fetches emails with attachments
-   - Filters based on query parameters
-   - Handles Gmail API integration
+### Agent System
 
-2. **Attachment Agent** (`attachment_agent.py`)
-   - Downloads email attachments
-   - Manages file storage
-   - Handles different attachment types
+1. **Multi Agent** (`src/agents/multi_agent.py`)
+   - Orchestrates communication between specialized agents
+   - Manages workflow and error handling
+   - Coordinates parallel processing tasks
 
-3. **PDF Extraction Agent** (`pdf_extraction_agent.py`)
-   - Extracts text from PDF files
-   - Processes multi-page documents
-   - Provides structured text output
+2. **Email Agent** (`src/agents/email_agent.py`)
+   - Gmail API integration for email fetching
+   - Email filtering and attachment handling
+   - Secure credential management
 
-4. **Payment Agent** (`payment_agent.py`)
-   - Processes payments
-   - Validates payment information
-   - Handles payment API integration
+3. **PDF Agent** (`src/agents/pdf_agent.py`)
+   - PDF download and storage management
+   - Integration with Composio AI for text extraction
+   - PDF validation and error handling
 
-5. **Invoice Payment Processor** (`invoice_payment_processor.py`)
-   - Extracts invoice information
-   - Validates extracted data
-   - Prepares payment requests
+4. **Payment Agent** (`src/agents/payment_agent.py`)
+   - Payment processing and validation
+   - Payment gateway integration
+   - Transaction history management
+
+### Tools and Utilities
+
+1. **Email Tools** (`src/tools/email_tools.py`)
+   - Email processing utilities
+   - MIME handling
+   - Attachment extraction
+
+2. **Payment Tools** (`src/tools/payment_tools.py`)
+   - Payment validation
+   - Currency handling
+   - Payment gateway interfaces
+
+3. **Shared Tools** (`src/tools/shared_tools.py`)
+   - Common utilities
+   - Data validation
+   - Error handling
 
 ## Setup Instructions
 
 ### Prerequisites
 
-- Python 3.8 or higher
-- Virtual environment (recommended)
-- Gmail API access
+- Python 3.8+
+- Virtual environment
+- Gmail API credentials
 - Composio API key
-- Payment API credentials
+- Payment gateway credentials
 
 ### Installation
 
-1. **Clone the Repository**
+1. **Clone and Setup**
    ```bash
    git clone <repository-url>
-   cd invoice-payment-agent
-   ```
-
-2. **Create and Activate Virtual Environment**
-   ```bash
-   # Windows
+   cd backend
    python -m venv venv
+   
+   # Windows
    .\venv\Scripts\activate
-
+   
    # Linux/Mac
-   python3 -m venv venv
    source venv/bin/activate
    ```
 
-3. **Install Dependencies**
+2. **Install Dependencies**
    ```bash
    pip install -r requirements.txt
    ```
 
-4. **Configure Environment Variables**
+3. **Environment Configuration**
    ```bash
-   # Copy example configuration
    cp .env.example .env
-
-   # Edit .env file with your credentials
-   # Required variables:
-   # - COMPOSIO_API_KEY
-   # - GMAIL_API_CREDENTIALS
-   # - PAYMENT_API_KEY
    ```
+   
 
-### Usage
+## Directory Structure
 
-1. **Basic Usage**
-   ```python
-   # Run the complete workflow
-   python workflow_test.py
-   ```
-
-2. **Individual Components**
-   ```python
-   # Email fetching only
-   python email_agent.py
-
-   # PDF processing only
-   python pdf_extraction_agent.py
-
-   # Payment processing only
-   python payment_agent.py
-   ```
+```
+backend/
+├── src/
+│   ├── agents/           # Agent implementations
+│   ├── tools/            # Utility functions
+│   ├── invoice data/     # Data storage
+│   └── scripts/          # Test scripts
+├── reference/            # Documentation
+└── venv/                # Virtual environment
+```
 
 ## Configuration
 
 ### Email Settings
-- `query`: Email search query (default: "has:attachment newer_than:7d")
-- `max_results`: Maximum number of emails to fetch (default: 10)
 
-### PDF Processing
-- `download_dir`: Directory for downloaded attachments (default: "downloads")
-- `debug`: Enable debug output (default: True)
+```python
+EMAIL_CONFIG = {
+    'query': 'has:attachment newer_than:7d',
+    'max_results': 10,
+    'attachment_dir': 'invoice data/email_attachments'
+}
+```
 
 ### Payment Processing
-- `currency`: Default currency for payments (default: "USD")
-- `batch_size`: Maximum payments per batch (default: 10)
 
-## Error Handling
-
-The system includes comprehensive error handling for:
-- Invalid email attachments
-- PDF extraction failures
-- Payment processing errors
-- API connection issues
+Using Payman to process payments.
 
 ## Development
 
-### Project Structure
-```
-invoice-payment-agent/
-├── email_agent.py         # Email fetching
-├── attachment_agent.py    # Attachment handling
-├── pdf_extraction_agent.py # PDF processing
-├── payment_agent.py       # Payment processing
-├── payment_tools.py       # Payment utilities
-├── invoice_payment_processor.py # Invoice processing
-├── multi_agent.py         # Agent coordination
-├── email_pdf_processor.py # Email-PDF integration
-├── workflow_test.py       # Complete workflow test
-├── .env                   # Configuration
-└── requirements.txt       # Dependencies
+### Running Tests
+
+```bash
+# Run all tests
+python -m pytest
+
+# Run specific test file
+python -m pytest src/scripts/test_invoice_processor.py
 ```
 
 ### Adding New Features
 
-1. **New Invoice Formats**
-   - Add patterns to `invoice_payment_processor.py`
-   - Update validation rules as needed
+1. **New Agent Implementation**
+   - Create new agent in `src/agents/`
+   - Implement required interfaces
+   - Add to multi-agent system
 
-2. **Additional Payment Methods**
-   - Add new payment tools to `payment_tools.py`
-   - Update payment agent configuration
-
-3. **Custom Processing**
-   - Extend relevant agent classes
-   - Add new processing methods as needed
+2. **New Payment Gateway**
+   - Add gateway interface in `src/tools/payment_tools.py`
+   - Implement required methods
+   - Update configuration
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Email Fetching Fails**
-   - Check Gmail API credentials
-   - Verify email query syntax
-   - Ensure proper authentication
+1. **Email Authentication**
+   - Verify Gmail API credentials
+   - Check refresh token validity
+   - Confirm API permissions
 
-2. **PDF Extraction Issues**
-   - Verify PDF file format
-   - Check file permissions
-   - Enable debug mode for detailed logs
+2. **Composio Integration**
+   - Validate API key
+   - Check rate limits
+   - Review extraction templates
 
-3. **Payment Processing Errors**
-   - Verify payment API credentials
-   - Check payment data format
-   - Review error logs
-
-### Debug Mode
-
-Enable debug mode in each component for detailed logging:
-```python
-agent = EmailAgent(debug=True)
-processor = InvoicePaymentProcessor(debug=True)
-```
+3. **Payment Processing**
+   - Verify payment gateway credentials
+   - Check transaction logs
+   - Validate payment data
 
 ## Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+2. Create feature branch
+3. Implement changes
+4. Add tests
+5. Submit pull request
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+MIT License - see LICENSE file for details. 
