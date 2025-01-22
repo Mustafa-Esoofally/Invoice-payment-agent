@@ -1,19 +1,371 @@
 """Multi-agent system for processing invoice emails and payments."""
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Literal, TypedDict, Sequence, Union, cast, Any
 from pathlib import Path
 import os
 import json
 from datetime import datetime
+from langgraph.graph import StateGraph
+from langgraph.prebuilt import ToolExecutor
+from langchain_core.messages import HumanMessage, BaseMessage, AIMessage
+from langchain.agents import create_react_agent
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from src.tools.shared_tools import (
     debug_print,
     format_error,
     ensure_directory
 )
-from src.agents.email_agent import fetch_emails, download_attachment
-from src.agents.pdf_agent import extract_text
-from src.agents.payment_agent import process_payment
+from src.agents.email_agent import process_emails, get_gmail_tools
+from src.agents.pdf_agent import extract_invoice_data, tools as pdf_tools
+from src.agents.payment_agent import process_payment, tools as payment_tools
+from src.openai_client import get_openai_client
+
+# Initialize LLM and tools
+llm = get_openai_client()
+gmail_tools = get_gmail_tools()
+
+# Define state type
+class AgentState(TypedDict):
+    messages: Sequence[BaseMessage]
+    data: Dict[str, Any]
+    next: Optional[str]
+
+# Create specialized agent prompts
+email_prompt = ChatPromptTemplate.from_messages([
+    ("system", """You are the email processing expert in a team of AI agents.
+Your task is to find and process invoice emails efficiently.
+Use Gmail tools to search, fetch, and handle attachments.
+When done, indicate if PDF extraction is needed or if there were any errors.
+
+Tools available: {tools}
+Tool names: {tool_names}"""),
+    MessagesPlaceholder(variable_name="chat_history"),
+    ("human", "{input}"),
+    MessagesPlaceholder(variable_name="agent_scratchpad"),
+])
+
+pdf_prompt = ChatPromptTemplate.from_messages([
+    ("system", """You are the PDF extraction expert in a team of AI agents.
+Your task is to extract structured data from invoice PDFs accurately.
+Use PDF tools to parse and validate invoice information.
+When done, indicate if payment processing is needed or if there were any errors.
+
+Tools available: {tools}
+Tool names: {tool_names}"""),
+    MessagesPlaceholder(variable_name="chat_history"),
+    ("human", "{input}"),
+    MessagesPlaceholder(variable_name="agent_scratchpad"),
+])
+
+payment_prompt = ChatPromptTemplate.from_messages([
+    ("system", """You are the payment processing expert in a team of AI agents.
+Your task is to process invoice payments safely and accurately.
+Use payment tools to validate and execute payments.
+When done, indicate FINAL ANSWER with the payment result or any errors.
+
+Tools available: {tools}
+Tool names: {tool_names}"""),
+    MessagesPlaceholder(variable_name="chat_history"),
+    ("human", "{input}"),
+    MessagesPlaceholder(variable_name="agent_scratchpad"),
+])
+
+# Create specialized agents
+def create_agent(llm, tools, prompt):
+    """Create a React agent with proper tool handling."""
+    tool_names = [tool.name for tool in tools]
+    tool_strings = [f"{tool.name}: {tool.description}" for tool in tools]
+    
+    # Create agent with tool information
+    return create_react_agent(
+        llm=llm,
+        tools=tools,
+        prompt=prompt.partial(
+            tools="\n".join(tool_strings),
+            tool_names=", ".join(tool_names)
+        )
+    )
+
+# Initialize agents
+email_agent = create_agent(llm, gmail_tools, email_prompt)
+pdf_agent = create_agent(llm, pdf_tools, pdf_prompt)
+payment_agent = create_agent(llm, payment_tools, payment_prompt)
+
+def get_next_node(state: AgentState) -> Dict[str, float]:
+    """Get next node probabilities based on state."""
+    try:
+        last_message = state["messages"][-1]
+        content = last_message.content.lower()
+        
+        # Initialize all probabilities to 0
+        next_nodes = {
+            "email_processor": 0.0,
+            "pdf_processor": 0.0,
+            "payment_processor": 0.0,
+            "__end__": 0.0
+        }
+        
+        # Set probability based on message content
+        if "error" in content:
+            next_nodes["__end__"] = 1.0
+        elif "pdf" in content:
+            next_nodes["pdf_processor"] = 1.0
+        elif "payment" in content:
+            next_nodes["payment_processor"] = 1.0
+        elif "final" in content:
+            next_nodes["__end__"] = 1.0
+        else:
+            next_node = state.get("next", "__end__")
+            next_nodes[next_node] = 1.0
+            
+        return next_nodes
+        
+    except Exception as e:
+        print(f"Error in get_next_node: {str(e)}")
+        return {"__end__": 1.0}
+
+async def email_node(state: AgentState) -> AgentState:
+    """Process invoice emails."""
+    try:
+        print("\n[EMAIL] 📧 Processing emails...")
+        email_result = await process_emails()
+        
+        if not email_result["success"]:
+            return {
+                "messages": [*state["messages"], AIMessage(content=f"Email processing failed: {email_result['error']}")],
+                "data": state["data"],
+                "next": "__end__"
+            }
+            
+        emails = email_result["data"]
+        if not emails:
+            return {
+                "messages": [*state["messages"], AIMessage(content="No invoice emails found")],
+                "data": state["data"],
+                "next": "__end__"
+            }
+            
+        # Process emails to extract essential information
+        processed_emails = []
+        for msg in emails:
+            processed_msg = {
+                'id': msg.get('messageId'),
+                'thread_id': msg.get('threadId'),
+                'subject': msg.get('subject'),
+                'sender': msg.get('sender'),
+                'attachments': [
+                    {
+                        'filename': att.get('filename'),
+                        'id': att.get('attachmentId')
+                    }
+                    for att in msg.get('attachmentList', [])
+                ]
+            }
+            processed_emails.append(processed_msg)
+            
+        return {
+            "messages": [
+                *state["messages"],
+                AIMessage(content=f"Found {len(processed_emails)} invoice emails with attachments. Moving to PDF processing.")
+            ],
+            "data": {**state["data"], "emails": processed_emails},
+            "next": "pdf_processor"
+        }
+        
+    except Exception as e:
+        error_msg = f"Error in email processing: {str(e)}"
+        print(f"[EMAIL] ❌ {error_msg}")
+        return {
+            "messages": [*state["messages"], AIMessage(content=error_msg)],
+            "data": state["data"],
+            "next": "__end__"
+        }
+
+async def pdf_node(state: AgentState) -> AgentState:
+    """Process PDF attachments."""
+    try:
+        print("\n[PDF] 📄 Processing attachments...")
+        emails = state["data"].get("emails", [])
+        if not emails:
+            return {
+                "messages": [*state["messages"], AIMessage(content="No emails to process")],
+                "data": state["data"],
+                "next": "__end__"
+            }
+            
+        pdf_results = []
+        for email in emails:
+            for attachment in email.get("attachments", []):
+                result = await extract_invoice_data(attachment["id"])
+                if result["success"]:
+                    pdf_results.append({
+                        "email_id": email["id"],
+                        "attachment_id": attachment["id"],
+                        "data": result["data"]
+                    })
+                    
+        if not pdf_results:
+            return {
+                "messages": [*state["messages"], AIMessage(content="No invoice data extracted from PDFs")],
+                "data": state["data"],
+                "next": "__end__"
+            }
+            
+        return {
+            "messages": [
+                *state["messages"],
+                AIMessage(content=f"Extracted data from {len(pdf_results)} PDFs. Moving to payment processing.")
+            ],
+            "data": {**state["data"], "pdf_results": pdf_results},
+            "next": "payment_processor"
+        }
+        
+    except Exception as e:
+        error_msg = f"Error in PDF processing: {str(e)}"
+        print(f"[PDF] ❌ {error_msg}")
+        return {
+            "messages": [*state["messages"], AIMessage(content=error_msg)],
+            "data": state["data"],
+            "next": "__end__"
+        }
+
+async def payment_node(state: AgentState) -> AgentState:
+    """Process payments."""
+    try:
+        print("\n[PAYMENT] 💸 Processing payments...")
+        pdf_results = state["data"].get("pdf_results", [])
+        if not pdf_results:
+            return {
+                "messages": [*state["messages"], AIMessage(content="No invoice data to process payments")],
+                "data": state["data"],
+                "next": "__end__"
+            }
+            
+        payment_results = []
+        for result in pdf_results:
+            payment = await process_payment(result["data"])
+            if payment["success"]:
+                payment_results.append({
+                    "email_id": result["email_id"],
+                    "attachment_id": result["attachment_id"],
+                    "payment": payment["data"]
+                })
+                
+        if not payment_results:
+            return {
+                "messages": [*state["messages"], AIMessage(content="No payments processed")],
+                "data": state["data"],
+                "next": "__end__"
+            }
+            
+        return {
+            "messages": [
+                *state["messages"],
+                AIMessage(content=f"Successfully processed {len(payment_results)} payments. FINAL ANSWER: Workflow complete.")
+            ],
+            "data": {**state["data"], "payment_results": payment_results},
+            "next": "__end__"
+        }
+        
+    except Exception as e:
+        error_msg = f"Error in payment processing: {str(e)}"
+        print(f"[PAYMENT] ❌ {error_msg}")
+        return {
+            "messages": [*state["messages"], AIMessage(content=error_msg)],
+            "data": state["data"],
+            "next": "__end__"
+        }
+
+async def process_invoices(query: str = "subject:invoice has:attachment newer_than:7d") -> Dict:
+    """Process invoices using multi-agent workflow."""
+    try:
+        print("\n[SYSTEM] 🚀 Starting invoice processing workflow...")
+        
+        # Process emails
+        print("\n[EMAIL] 📧 Processing emails...")
+        email_result = await process_emails(query)
+        
+        if not email_result["success"]:
+            return {
+                "success": False,
+                "messages": [f"Email processing failed: {email_result['error']}"],
+                "error": email_result["error"]
+            }
+            
+        emails = email_result["data"]
+        if not emails:
+            return {
+                "success": True,
+                "messages": ["No invoice emails found"],
+                "data": {}
+            }
+            
+        messages = [f"Found {len(emails)} invoice emails with attachments"]
+        data = {"emails": emails}
+        
+        # Process PDFs
+        print("\n[PDF] 📄 Processing PDFs...")
+        pdf_results = []
+        
+        for email in emails:
+            for attachment in email.get("attachments", []):
+                result = await extract_invoice_data(attachment["id"])
+                if result["success"]:
+                    pdf_results.append({
+                        "email_id": email["id"],
+                        "attachment_id": attachment["id"],
+                        "data": result["data"]
+                    })
+                    
+        if not pdf_results:
+            return {
+                "success": True,
+                "messages": messages + ["No invoice data extracted from PDFs"],
+                "data": data
+            }
+            
+        messages.append(f"Extracted data from {len(pdf_results)} PDFs")
+        data["pdf_results"] = pdf_results
+        
+        # Process payments
+        print("\n[PAYMENT] 💸 Processing payments...")
+        payment_results = []
+        
+        for result in pdf_results:
+            payment = await process_payment(result["data"])
+            if payment["success"]:
+                payment_results.append({
+                    "email_id": result["email_id"],
+                    "attachment_id": result["attachment_id"],
+                    "payment": payment["data"]
+                })
+                
+        if not payment_results:
+            return {
+                "success": True,
+                "messages": messages + ["No payments processed"],
+                "data": data
+            }
+            
+        messages.append(f"Successfully processed {len(payment_results)} payments")
+        data["payment_results"] = payment_results
+        
+        print("\n[SYSTEM] ✅ Workflow complete")
+        return {
+            "success": True,
+            "messages": messages,
+            "data": data
+        }
+        
+    except Exception as e:
+        error_msg = str(e)
+        print(f"\n[SYSTEM] ❌ Workflow error: {error_msg}")
+        return {
+            "success": False,
+            "messages": [f"Error: {error_msg}"],
+            "error": error_msg
+        }
 
 def save_payment_history(payment_data: Dict) -> None:
     """Save payment data to JSON file.
@@ -183,223 +535,6 @@ def print_extracted_data(payment_info: Dict, debug: bool = False) -> None:
     
     print("\n" + "=" * 50)
 
-async def process_invoice_emails(
-    query: str = "subject:invoice has:attachment newer_than:7d",
-    max_results: int = 10,
-    download_dir: str = "invoice data/email_attachments",
-    debug: bool = False
-) -> Dict:
-    """Process invoice emails with PDF attachments
-    
-    Args:
-        query (str): Gmail search query
-        max_results (int): Maximum number of results
-        download_dir (str): Directory to save attachments
-        debug (bool): Enable debug output
-        
-    Returns:
-        dict: Processing results
-    """
-    try:
-        print("\n🔄 Starting Invoice Email Processing")
-        print("=" * 50)
-        
-        if debug:
-            debug_print("Process Request", {
-                "query": query,
-                "max_results": max_results,
-                "download_dir": download_dir
-            })
-        
-        # Ensure all required directories exist
-        base_dir = ensure_directory("invoice data")
-        attachments_dir = ensure_directory(os.path.join(base_dir, "email_attachments"))
-        processed_dir = ensure_directory(os.path.join(base_dir, "processed"))
-        
-        # Create date-based directory for attachments
-        today = datetime.now().strftime("%Y-%m-%d")
-        download_dir = ensure_directory(os.path.join(attachments_dir, today))
-        
-        # print(f"\n📁 Directory Structure:")
-        # print(f"Base Directory: {base_dir}")
-        # print(f"Attachments Directory: {attachments_dir}")
-        # print(f"Today's Directory: {download_dir}")
-        # print(f"Processed Directory: {processed_dir}")
-        
-        # if debug:
-        #     debug_print("Directory Structure", {
-        #         "base_dir": base_dir,
-        #         "attachments_dir": attachments_dir,
-        #         "download_dir": download_dir,
-        #         "processed_dir": processed_dir,
-        #         "date": today
-        #     })
-        
-        # Fetch emails with attachments
-        print("\n📧 Fetching Emails...")
-        fetch_result = fetch_emails(
-            query=query,
-            max_results=max_results,
-            debug=debug
-        )
-        
-        if not fetch_result["success"]:
-            print(f"❌ Failed to fetch emails: {fetch_result.get('error', 'Unknown error')}")
-            return fetch_result
-            
-        print(f"✉️ Found {len(fetch_result['emails'])} emails to process")
-        
-        processed_invoices = []
-        for idx, email in enumerate(fetch_result["emails"], 1):
-            print(f"\n📨 Processing Email {idx}/{len(fetch_result['emails'])}")
-            print(f"Subject: {email['subject']}")
-            print(f"From: {email['sender']}")
-            
-            # Process each attachment
-            for attachment in email["attachments"]:
-                if not attachment["mime_type"].lower().endswith("pdf"):
-                    print(f"⏩ Skipping non-PDF attachment: {attachment['filename']}")
-                    continue
-                    
-                print(f"\n📎 Processing attachment: {attachment['filename']}")
-                
-                # Download attachment
-                download_result = download_attachment(
-                    message_id=email["message_id"],
-                    attachment_id=attachment["attachment_id"],
-                    filename=attachment["filename"],
-                    download_dir=download_dir,
-                    debug=debug
-                )
-                
-                if not download_result["success"]:
-                    print(f"❌ Failed to download attachment: {download_result.get('error', 'Unknown error')}")
-                    continue
-                
-                print(f"✅ Downloaded: {download_result['file_path']}")
-                
-                # Extract text from PDF
-                print("\n📄 Extracting text from PDF...")
-                extract_result = extract_text(
-                    download_result["file_path"],
-                    debug=debug
-                )
-                
-                if not extract_result["success"]:
-                    print(f"❌ Failed to extract text: {extract_result.get('error', 'Unknown error')}")
-                    continue
-                
-                print("✅ Text extraction successful")
-                
-                # Use extracted payment information
-                payment_info = extract_result.get("payment_info", {})
-                if not payment_info:
-                    print("❌ No payment information found in PDF")
-                    continue
-                
-                # Print extracted data in readable format
-                print_extracted_data(payment_info, debug=debug)
-                
-                # Create invoice data from extracted info
-                invoice_data = {
-                    "invoice_number": payment_info.get("invoice_number") or f"INV-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
-                    "paid_amount": payment_info.get("paid_amount"),
-                    "recipient": payment_info.get("recipient"),
-                    "date": email["timestamp"],
-                    "due_date": payment_info.get("due_date"),
-                    "description": payment_info.get("description"),
-                    "bank_details": payment_info.get("bank_details", {}),
-                    "email_data": {
-                        "thread_id": email["thread_id"],
-                        "message_id": email["message_id"],
-                        "sender": email["sender"],
-                        "subject": email["subject"]
-                    }
-                }
-                
-                print("\n�� Processing payment...")
-                print(f"Invoice: {invoice_data['invoice_number']}")
-                print(f"Amount: {invoice_data['paid_amount']}")
-                print(f"Recipient: {invoice_data['recipient']}")
-                
-                if debug:
-                    debug_print("Payment Request", {
-                        "invoice_data": invoice_data
-                    })
-
-                # Process payment asynchronously
-                payment_result = await process_payment(invoice_data)
-
-                if debug:
-                    debug_print("Payment Response", payment_result)
-                
-                # Add success flag if not present
-                if "success" not in payment_result:
-                    payment_result["success"] = "error" not in payment_result
-                
-                if payment_result["success"]:
-                    print("✅ Payment processed successfully")
-                else:
-                    print(f"❌ Payment failed: {payment_result.get('error', 'Unknown error')}")
-                
-                # Create payment history entry
-                payment_history = {
-                    "email_data": invoice_data["email_data"],
-                    "invoice_data": invoice_data,
-                    "result": {
-                        "success": payment_result["success"],
-                        "error": payment_result.get("error"),
-                        "email_sent": payment_result.get("email_sent", False),
-                        "payment_id": payment_result.get("payment_id")
-                    }
-                }
-                
-                # Save payment history
-                print("\n💾 Saving payment history...")
-                save_payment_history(payment_history)
-                print("✅ History saved")
-                
-                if not payment_result["success"]:
-                    continue
-                
-                processed_invoices.append({
-                    "email": {
-                        "subject": email["subject"],
-                        "sender": email["sender"],
-                        "timestamp": email["timestamp"]
-                    },
-                    "attachment": {
-                        "filename": attachment["filename"],
-                        "file_path": download_result["file_path"],
-                        "size": download_result["size"]
-                    },
-                    "invoice": invoice_data,
-                    "payment": payment_result
-                })
-        
-        response = {
-            "success": True,
-            "total_processed": len(processed_invoices),
-            "invoices": processed_invoices
-        }
-        
-        print(f"\n🎉 Processing Complete!")
-        print(f"✅ Successfully processed {len(processed_invoices)} invoices")
-        
-        if debug:
-            debug_print("Process Complete", {
-                "total_processed": response["total_processed"]
-            })
-            
-        return response
-        
-    except Exception as e:
-        error = format_error(e)
-        print(f"\n❌ Processing Error: {str(e)}")
-        if debug:
-            debug_print("Process Error", error)
-        return {"success": False, "error": str(e)}
-
 def main():
     """Example usage of invoice processing"""
     try:
@@ -414,7 +549,7 @@ def main():
         print(f"Query: {query}")
         print(f"Max Results: {max_results}")
         
-        result = process_invoice_emails(
+        result = process_invoices(
             query=query,
             max_results=max_results,
             debug=True
