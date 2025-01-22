@@ -1,36 +1,148 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Invoice Payment Agent Frontend
+
+A modern web interface for managing and monitoring automated invoice payments. Built with Next.js 14, TypeScript, and Shadcn UI components.
+
+## Features
+
+- 📊 **Dashboard Overview**: Real-time monitoring of invoice processing status
+- 📬 **Email Monitoring**: View incoming invoice emails and their processing status
+- 📄 **Invoice Management**: Review and manage processed invoices
+- 💳 **Payment Tracking**: Monitor payment status and history
+- 🔍 **Search & Filter**: Advanced search capabilities for invoices and payments
+- 📱 **Responsive Design**: Fully responsive interface for all devices
+
+## Tech Stack
+
+- **Framework**: Next.js 14 with App Router
+- **Language**: TypeScript
+- **UI Components**: Shadcn UI
+- **State Management**: React Hooks
+- **API Integration**: REST API with backend
+- **Styling**: CSS Modules
+- **Authentication**: NextAuth.js
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Node.js 18.17 or later
+- npm or yarn package manager
+- Backend API running locally or deployed
+
+### Installation
+
+1. **Clone the Repository**
+   ```bash
+   git clone <repository-url>
+   cd frontend
+   ```
+
+2. **Install Dependencies**
+   ```bash
+   npm install
+   # or
+   yarn install
+   ```
+
+3. **Environment Setup**
+   ```bash
+   # Copy example configuration
+   cp .env.local.example .env.local
+
+   # Configure environment variables:
+   # - NEXT_PUBLIC_API_URL=http://localhost:8000
+   # - NEXTAUTH_SECRET=your-secret
+   # - NEXTAUTH_URL=http://localhost:3000
+   ```
+
+4. **Run Development Server**
+   ```bash
+   npm run dev
+   # or
+   yarn dev
+   ```
+
+   Open [http://localhost:3000](http://localhost:3000) to view the application.
+
+## Project Structure
+
+```
+frontend/
+├── app/                  # Next.js app directory
+│   ├── layout.tsx       # Root layout
+│   ├── page.tsx         # Home page
+│   ├── dashboard/       # Dashboard routes
+│   ├── invoices/        # Invoice management
+│   └── payments/        # Payment tracking
+├── components/          # Reusable components
+│   ├── ui/             # Shadcn components
+│   └── custom/         # Custom components
+├── hooks/              # Custom React hooks
+├── lib/               # Utility functions
+└── public/            # Static assets
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Available Scripts
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `npm run dev`: Start development server
+- `npm run build`: Build production application
+- `npm run start`: Start production server
+- `npm run lint`: Run ESLint
+- `npm run type-check`: Run TypeScript compiler check
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Component Library
 
-## Learn More
+We use Shadcn UI components. To add new components:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npx shadcn@latest add [component-name]
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Available components can be found in the `components/ui` directory.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## API Integration
 
-## Deploy on Vercel
+The frontend communicates with the backend through REST APIs:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `/api/invoices`: Invoice management endpoints
+- `/api/payments`: Payment processing endpoints
+- `/api/emails`: Email monitoring endpoints
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## State Management
+
+- React Query for server state
+- React Context for global UI state
+- Local state with useState for component-level state
+
+## Contributing
+
+1. Create a feature branch
+2. Make your changes
+3. Run tests and linting
+4. Submit a pull request
+
+## Development Guidelines
+
+- Follow TypeScript best practices
+- Use functional components and hooks
+- Implement proper error handling
+- Write clean, documented code
+- Follow the existing project structure
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Build Errors**
+   - Clear `.next` directory
+   - Remove `node_modules` and reinstall
+   - Check TypeScript errors
+
+2. **API Connection Issues**
+   - Verify backend is running
+   - Check environment variables
+   - Confirm CORS settings
+
+## License
+
+This project is licensed under the MIT License.
