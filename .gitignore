@@ -180,4 +180,4 @@ frontend/package-lock.json
 
 # invoice data
 backend/invoice data/email_attachments/
-
+backend/venv/
