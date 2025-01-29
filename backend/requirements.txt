@@ -19,6 +19,8 @@ pydantic>=2.5.3
 # API integrations
 requests>=2.31.0
 aiohttp>=3.9.1
+firebase-admin>=6.4.0  # Firebase integration
+PyJWT>=2.8.0  # JWT authentication
 
 # Utilities
 python-dateutil>=2.8.2
