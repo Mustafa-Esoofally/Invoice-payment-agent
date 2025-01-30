@@ -2,10 +2,11 @@
 
 import os
 import sys
+import uuid
 from datetime import datetime
 from typing import Dict, List
 from dotenv import load_dotenv
-from firebase_admin import initialize_app, credentials, firestore, get_app
+from firebase_admin import initialize_app, credentials, firestore, storage, get_app
 
 # Add the parent directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -16,79 +17,99 @@ load_dotenv()
 # Initialize Firebase
 try:
     firebase_app = get_app()
+    print("Using existing Firebase app")
 except ValueError:
-    cred = credentials.Certificate("byrdeai-firebase-adminsdk-fbsvc-a168a9a31d.json")
-    firebase_app = initialize_app(cred)
+    try:
+        cred = credentials.Certificate("../byrdeai-firebase-adminsdk-fbsvc-a168a9a31d.json")
+        firebase_app = initialize_app(cred, {
+            'storageBucket': 'byrdeai.firebasestorage.app'
+        })
+        print("Initialized new Firebase app")
+    except Exception as e:
+        print(f"Error initializing Firebase: {str(e)}")
+        raise
 
+# Initialize Firestore and Storage
 db = firestore.client()
+bucket = storage.bucket()
 
-def generate_test_data() -> List[Dict]:
-    """Generate simplified test data for 5 invoices."""
-    return [
-        {
-            "file_url": "https://storage.googleapis.com/byrdeai/invoices/tech_solutions_001.pdf",
-            "status": "pending"
-        },
-        {
-            "file_url": "https://storage.googleapis.com/byrdeai/invoices/digital_dynamics_002.pdf",
-            "status": "pending"
-        },
-        {
-            "file_url": "https://storage.googleapis.com/byrdeai/invoices/new_tech_003.pdf",
-            "status": "pending"
-        },
-        {
-            "file_url": "https://storage.googleapis.com/byrdeai/invoices/innovate_systems_004.pdf",
-            "status": "pending"
-        },
-        {
-            "file_url": "https://storage.googleapis.com/byrdeai/invoices/global_tech_005.pdf",
-            "status": "pending"
-        }
-    ]
+def list_storage_files(prefix: str = "") -> List[Dict]:
+    """List all files in Firebase Storage with given prefix."""
+    print(f"\n📂 Listing files with prefix: {prefix}")
+    try:
+        blobs = bucket.list_blobs(prefix=prefix)
+        files = []
+        
+        for blob in blobs:
+            # Generate a signed URL that doesn't expire
+            url = f"https://firebasestorage.googleapis.com/v0/b/{bucket.name}/o/{blob.name.replace('/', '%2F')}?alt=media"
+            files.append({
+                "name": blob.name,
+                "url": url,
+                "created": blob.time_created,
+                "updated": blob.updated,
+                "size": blob.size,
+                "content_type": blob.content_type
+            })
+            print(f"Found file: {blob.name}")
+            print(f"URL: {url}")
+        
+        return files
+    except Exception as e:
+        print(f"\n❌ Error listing files: {str(e)}")
+        raise
 
-def store_test_invoices(customer_id: str) -> None:
-    """Store test invoices in Firebase for a given customer."""
-    print(f"\n💾 Storing test invoices for customer: {customer_id}")
-    print("=" * 50)
+def create_invoice_record(customer_id: str, file_info: Dict) -> str:
+    """Create an invoice record in Firestore."""
+    invoice_id = str(uuid.uuid4())
     
-    test_data = generate_test_data()
+    invoice_data = {
+        "customer_id": customer_id,
+        "file_name": file_info["name"],
+        "file_url": file_info["url"],
+        "status": "pending",
+        "created_at": datetime.now(),
+        "updated_at": datetime.now()
+    }
     
-    for i, invoice in enumerate(test_data, 1):
-        # Create the document data with minimal fields
-        invoice_data = {
-            "customer_id": customer_id,
-            "file_url": invoice["file_url"],
-            "status": invoice["status"]
-        }
-        
-        # Store in Firebase
-        invoice_ref = db.collection("invoices").document()
-        invoice_ref.set(invoice_data)
-        
-        # Print details
-        print(f"\n📄 Stored Invoice {i}:")
-        print(f"  ID: {invoice_ref.id}")
-        print(f"  Customer: {customer_id}")
-        print(f"  Status: {invoice['status']}")
-        print(f"  File URL: {invoice['file_url']}")
-        print("-" * 50)
+    # Store in Firestore
+    db.collection("invoices").document(invoice_id).set(invoice_data)
+    print(f"\n✅ Created invoice record: {invoice_id}")
+    print(f"  File: {file_info['name']}")
+    print(f"  Customer: {customer_id}")
     
-    print(f"\n📊 Summary for {customer_id}:")
-    print(f"  Total Invoices: {len(test_data)}")
-    print("=" * 50)
+    return invoice_id
 
 def main():
-    """Main function to generate test data."""
-    print("\n🚀 Starting Test Data Generation")
+    """Main function to create invoice records."""
+    print("\n🚀 Starting Invoice Record Creation")
     print("=" * 50)
     
-    # Store invoices for both test customers
-    customers = ["test_customer_1", "test_customer_2"]
-    for customer_id in customers:
-        store_test_invoices(customer_id)
+    # List files from storage
+    print("\n📂 Fetching files from Firebase Storage...")
+    files = list_storage_files()
     
-    print("\n✅ Test Data Generation Complete!")
+    if not files:
+        print("\n❌ No files found in storage")
+        return
+    
+    print(f"\n📊 Found {len(files)} files")
+    
+    # Create records for each file
+    customer_id = "cust_001"  # Using the first customer from our previous setup
+    created_records = []
+    
+    for file_info in files:
+        try:
+            invoice_id = create_invoice_record(customer_id, file_info)
+            created_records.append(invoice_id)
+        except Exception as e:
+            print(f"\n❌ Error creating record for {file_info['name']}: {str(e)}")
+    
+    print("\n📊 Summary:")
+    print(f"Total files processed: {len(files)}")
+    print(f"Records created: {len(created_records)}")
+    print("=" * 50)
 
 if __name__ == "__main__":
     main() 
