@@ -182,3 +182,4 @@ frontend/package-lock.json
 backend/invoice data/email_attachments/
 backend/venv/
 backend/byrdeai-firebase-adminsdk-fbsvc-a168a9a31d.json
+backend/src/byrdeai-firebase-adminsdk-fbsvc-a168a9a31d.json
