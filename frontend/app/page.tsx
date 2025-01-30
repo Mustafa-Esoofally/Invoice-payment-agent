@@ -4,14 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Mail, XCircle } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ProfileDetails } from "@/components/ProfileDetails";
 import { PaymentHistory } from "@/components/PaymentHistory";
 import { ProcessInvoices } from "@/components/ProcessInvoices";
 import { InvoiceList } from "@/components/InvoiceList";
 import { Invoice, ScanInboxResponse } from "@/types/invoice";
-import { createAuthHeader } from "@/lib/utils";
+import { createAuthHeader, formatCurrency } from "@/lib/utils";
 
 interface EmailProfile {
   emailAddress: string;
@@ -53,6 +53,7 @@ export default function Home() {
   const [existingInvoices, setExistingInvoices] = useState<Invoice[]>([]);
   const [newInvoices, setNewInvoices] = useState<Invoice[]>([]);
   const [paymentHistory, setPaymentHistory] = useState<PaymentHistory[]>([]);
+  const { toast } = useToast();
 
   const fetchPaymentHistory = useCallback(async () => {
     try {
@@ -62,7 +63,31 @@ export default function Home() {
       if (!response.ok) throw new Error('Failed to fetch payment history');
       
       const data = await response.json();
-      setPaymentHistory(data.payments);
+      // Ensure proper data structure with default values
+      const sanitizedPayments = (data.payments || []).map((payment: any) => ({
+        email: {
+          subject: payment?.email?.subject || '',
+          sender: payment?.email?.sender || '',
+          timestamp: payment?.email?.timestamp || new Date().toISOString(),
+        },
+        invoice: {
+          invoice_number: payment?.invoice?.invoice_number || '',
+          paid_amount: payment?.invoice?.paid_amount || 0,
+          recipient: payment?.invoice?.recipient || '',
+          date: payment?.invoice?.date || '',
+          due_date: payment?.invoice?.due_date || '',
+        },
+        payment: {
+          success: payment?.payment?.success ?? false,
+          amount: payment?.payment?.amount || 0,
+          recipient: payment?.payment?.recipient || '',
+          reference: payment?.payment?.reference || null,
+          error: payment?.payment?.error || null,
+        },
+        timestamp: payment?.timestamp || new Date().toISOString(),
+      }));
+      
+      setPaymentHistory(sanitizedPayments);
     } catch (error) {
       console.error('Failed to fetch payment history:', error);
       toast({
@@ -155,13 +180,38 @@ export default function Home() {
   }, []);
 
   const handlePaymentComplete = useCallback(() => {
-    // Refresh both invoice list and payment history
     handleScanInbox();
     fetchPaymentHistory();
   }, [handleScanInbox, fetchPaymentHistory]);
 
-  const successCount = paymentHistory.filter(payment => payment.payment.success).length;
-  const failedCount = paymentHistory.filter(payment => !payment.payment.success).length;
+  // Add initial data loading
+  useEffect(() => {
+    const loadInitialData = async () => {
+      try {
+        await Promise.all([
+          handleScanInbox(),
+          fetchPaymentHistory()
+        ]);
+      } catch (error) {
+        console.error('Failed to load initial data:', error);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Failed to load initial data. Please refresh the page.",
+        });
+      }
+    };
+
+    loadInitialData();
+  }, [handleScanInbox, fetchPaymentHistory]);
+
+  const successCount = paymentHistory.filter(payment => 
+    payment?.payment?.success ?? false
+  ).length;
+  
+  const failedCount = paymentHistory.filter(payment => 
+    !(payment?.payment?.success ?? true)
+  ).length;
 
   return (
     <div className="min-h-screen bg-gray-50/50">

@@ -1,29 +1,45 @@
 """FastAPI service for invoice processing using multi-agent system."""
 
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Any
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 import json
-from datetime import datetime
-from dotenv import load_dotenv
-import traceback
+from datetime import datetime, timedelta
+import re
 from pathlib import Path
-from firebase_admin import firestore, storage, initialize_app, credentials
-from tools.shared_tools import format_error, ensure_directory
-from tools.auth import verify_jwt
+from firebase_admin import initialize_app, credentials, firestore, storage
+from dotenv import load_dotenv
+from config.auth import jwt_auth
+from agents.pdf_agent import extract_text
+from agents.payment_agent import process_payment
+from tools.payment_tools import BalanceTool, SearchPayeesTool, SendPaymentTool, CheckoutUrlTool
 
-# Load environment variables
+# Load environment variables and validate
 load_dotenv()
 
+# Validate required environment variables
+required_env_vars = [
+    "OPENAI_API_KEY",
+    "COMPOSIO_API_KEY",
+    "JWT_SECRET"
+]
+
+missing_vars = [var for var in required_env_vars if not os.getenv(var)]
+if missing_vars:
+    raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
+
 # Initialize Firebase Admin SDK
-cred = credentials.Certificate("payman-agent-render-firebase-adminsdk-fbsvc-76639f1307.json")
-app = initialize_app(cred, {
-    'storageBucket': 'payman-agent-render.firebasestorage.app'
-})
-db = firestore.client()
-bucket = storage.bucket()
+try:
+    cred = credentials.Certificate("payman-agent-render-firebase-adminsdk-fbsvc-76639f1307.json")
+    app = initialize_app(cred, {
+        'storageBucket': 'payman-agent-render.firebasestorage.app'
+    })
+    db = firestore.client()
+    bucket = storage.bucket()
+except Exception as e:
+    raise ValueError(f"Failed to initialize Firebase: {str(e)}")
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -39,7 +55,12 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-)
+        )
+
+class ScanInboxRequest(BaseModel):
+    """Request model for scanning inbox."""
+    query: Optional[str] = "subject:invoice has:attachment newer_than:7d"
+    max_results: Optional[int] = 10
 
 class PayInvoiceRequest(BaseModel):
     """Request model for invoice payment."""
@@ -61,111 +82,284 @@ def serialize_firebase_data(data: Any) -> Any:
         return data.isoformat()
     return data
 
+async def get_customer_invoices(customer_id: str) -> List[Dict]:
+    """Get all invoices for a customer from Firebase."""
+    invoices = []
+    query = db.collection("invoices").where("customer_id", "==", customer_id)
+    docs = query.stream()
+    
+    for doc in docs:
+        try:
+            invoice_data = doc.to_dict()
+            invoice_data["id"] = doc.id
+            serialized_data = serialize_firebase_data(invoice_data)
+            invoices.append(serialized_data)
+        except Exception as e:
+            print(f"Error processing invoice {doc.id}: {str(e)}")
+    
+    return invoices
+
+async def mock_scan_emails(query: str, max_results: int) -> List[Dict]:
+    """Mock function to simulate email scanning."""
+    # Create test invoice file if it doesn't exist
+    test_file = Path("test_data/mock-invoice-3.pdf")
+    test_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    if not test_file.exists():
+        with open(test_file, "w") as f:
+            f.write("""INVOICE
+
+Invoice Number: INV-2024-003
+Date: 2024-01-29
+Due Date: 2024-02-28
+
+Bill To:
+Test Customer
+123 Test Street
+Test City, TC 12345
+
+Description: Cloud Services - February 2024
+Amount: $3,500.00
+Currency: USD
+
+Payment Details:
+Bank: Test Bank
+Account Holder: New Tech Corp
+Account Type: Checking
+Account Number: 1234567890
+Routing Number: 987654321
+
+Please make payment by the due date.
+Thank you for your business!
+""")
+    
+    return [
+        {
+            "invoice_number": "INV-2024-003",
+            "amount": 3500.00,
+            "currency": "USD",
+            "due_date": (datetime.now() + timedelta(days=30)).isoformat(),
+            "recipient": "New Tech Corp",
+            "description": "Cloud Services - February 2024",
+            "file_url": str(test_file.absolute()),
+            "file_name": "invoice-3.pdf",
+            "bank_details": {
+                "account_name": "New Tech Corp",
+                "account_number": "1234567890",
+                "routing_number": "987654321",
+                "bank_name": "Test Bank",
+                "account_type": "checking"
+            },
+            "metadata": {
+                "invoice_date": datetime.now().isoformat(),
+                "payment_terms": "Net 30",
+                "po_number": "PO-2024-003",
+                "tax_amount": 350.00,
+                "subtotal": 3150.00
+            }
+        }
+    ]
+
+@app.post("/scan-inbox")
+async def scan_inbox(
+    request: ScanInboxRequest = ScanInboxRequest(),
+    customer_id: str = Depends(jwt_auth)
+) -> Dict:
+    """Get existing invoices for the authenticated customer."""
+    try:
+        # Get existing invoices for the authenticated customer
+        existing_invoices = await get_customer_invoices(customer_id)
+        
+        # Calculate total amount
+        total_amount = sum(invoice.get("data", {}).get("amount", 0) for invoice in existing_invoices)
+
+        return {
+            "success": True,
+            "message": f"Found {len(existing_invoices)} invoices for customer {customer_id}",
+            "customer": {
+                "id": customer_id
+            },
+            "invoices": existing_invoices,
+            "summary": {
+                "total_invoices": len(existing_invoices),
+                "total_amount": total_amount
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/pay-invoice")
 async def pay_invoice(
     request: PayInvoiceRequest,
-    claims: Dict = Depends(verify_jwt)
+    customer_id: str = Depends(jwt_auth)
 ) -> Dict:
     """Process payment for a specific invoice."""
     try:
-        # Validate customer_id from JWT token
-        customer_id = claims.get("customer_id")
-        if not customer_id:
-            raise HTTPException(
-                status_code=400, 
-                detail="Customer ID not found in token"
-            )
+        print("\n" + "="*50)
+        print("💳 PAYMENT PROCESSING WORKFLOW")
+        print("="*50)
 
         # Get the invoice from Firebase
+        print(f"\n1️⃣ Fetching invoice {request.invoice_id}...")
         invoice_ref = db.collection("invoices").document(request.invoice_id)
         invoice_doc = invoice_ref.get()
         
         if not invoice_doc.exists:
-            raise HTTPException(
-                status_code=404,
-                detail="Invoice not found"
-            )
+            print("❌ Invoice not found")
+            raise HTTPException(status_code=404, detail="Invoice not found")
             
-        # Get invoice data and serialize it
+        # Get invoice data and verify ownership
+        print("\n2️⃣ Verifying invoice ownership...")
         invoice_data = invoice_doc.to_dict()
         invoice_data["id"] = invoice_doc.id
+        print(f"Invoice Data: {json.dumps(serialize_firebase_data(invoice_data), indent=2)}")
         
-        # Verify the invoice belongs to the authenticated customer
         if invoice_data.get("customer_id") != customer_id:
-            raise HTTPException(
-                status_code=403,
-                detail="Not authorized to access this invoice"
-            )
+            print(f"❌ Access denied - Invoice belongs to {invoice_data.get('customer_id')}, not {customer_id}")
+            raise HTTPException(status_code=403, detail="Not authorized to access this invoice")
+        print("✅ Invoice ownership verified")
         
-        # Get the file path from invoice data
+        # Get and validate file path
+        print("\n3️⃣ Validating file path...")
         file_path = invoice_data.get("file_path")
         if not file_path:
-            raise HTTPException(
-                status_code=400,
-                detail="Invoice file path not found"
-            )
+            print("❌ No file path found in invoice data")
+            raise HTTPException(status_code=400, detail="Invoice file path not found")
+        print(f"✅ File path found: {file_path}")
         
-        # Create downloads directory if it doesn't exist
+        # Setup file download
+        print("\n4️⃣ Setting up file download...")
         downloads_dir = Path("downloads")
         downloads_dir.mkdir(exist_ok=True)
         
-        # Generate local file path - ensure safe filename
         file_name = os.path.basename(file_path)
         if not file_name:
             file_name = f"invoice_{request.invoice_id}.pdf"
         else:
-            import re
             file_name = re.sub(r'[<>:"/\\|?*]', '_', file_name)
             
         local_path = downloads_dir / file_name
+        print(f"Download path: {local_path}")
         
         try:
-            # Download using Firebase Admin SDK
+            # Download file
+            print("\n5️⃣ Downloading invoice file...")
             blob = bucket.blob(file_path)
             blob.download_to_filename(str(local_path))
             
             if not os.path.exists(local_path):
-                raise HTTPException(
-                    status_code=500,
-                    detail="Failed to download invoice file"
-                )
+                print("❌ File download failed - File not found at local path")
+                raise HTTPException(status_code=500, detail="Failed to download invoice file")
+            print(f"✅ File downloaded successfully ({os.path.getsize(local_path)} bytes)")
+            
         except Exception as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to download invoice file: {str(e)}"
-            )
+            print(f"❌ File download error: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to download invoice file: {str(e)}")
         
-        # Update invoice status to processing
+        # Update status to processing
+        print("\n6️⃣ Updating invoice status to processing...")
         invoice_ref.update({
             "status": "processing",
             "processing_started_at": firestore.SERVER_TIMESTAMP,
             "local_file_path": str(local_path)
         })
+        print("✅ Status updated")
 
-        # Extract payment details from PDF
         try:
+            # Extract payment details
+            print("\n7️⃣ Extracting payment details from PDF...")
             payment_details = extract_text(str(local_path), extract_metadata=True)
             
             if not payment_details or "error" in payment_details:
-                raise ValueError(payment_details.get("error", "Failed to extract payment details from PDF"))
+                error_msg = payment_details.get("error", "Failed to extract payment details from PDF")
+                print(f"❌ Extraction failed: {error_msg}")
+                raise ValueError(error_msg)
             
-            # Update invoice with extracted details
-            invoice_ref.update({
+            print("Extracted Payment Details:")
+            print(json.dumps(payment_details, indent=2))
+            
+            # Save extracted details regardless of payment outcome
+            metadata_update = {
                 "extracted_details": payment_details,
-                "last_updated": firestore.SERVER_TIMESTAMP
-            })
+                "last_updated": firestore.SERVER_TIMESTAMP,
+                "metadata": {
+                    "extraction_timestamp": firestore.SERVER_TIMESTAMP,
+                    "invoice_number": payment_details.get("invoice_number"),
+                    "invoice_date": payment_details.get("date"),
+                    "due_date": payment_details.get("due_date"),
+                    "amount": payment_details.get("paid_amount"),
+                    "recipient": payment_details.get("recipient"),
+                    "description": payment_details.get("description"),
+                    "bank_details": {
+                        "type": payment_details.get("bank_details", {}).get("type"),
+                        "bank_name": payment_details.get("bank_details", {}).get("bank_name"),
+                        "account_holder": payment_details.get("bank_details", {}).get("account_holder_name")
+                    },
+                    "customer_info": payment_details.get("customer", {}),
+                    "payee_info": payment_details.get("payee_details", {})
+                }
+            }
+            invoice_ref.update(metadata_update)
+            print("✅ Metadata saved to Firebase")
             
         except Exception as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to extract payment details: {str(e)}"
-            )
+            print(f"❌ Payment details extraction error: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to extract payment details: {str(e)}")
         
-        # Process payment
         try:
-            payment_result = await process_payment({
+            # Process payment
+            print("\n9️⃣ Processing payment...")
+            print("\n[PAYMAN] Payment Flow:")
+            print("-" * 50)
+            
+            # 1. Check balance first
+            print("\n[PAYMAN] 1. Checking balance...")
+            balance_tool = BalanceTool()
+            balance_result = balance_tool.run("")
+            print(f"Balance check result: {balance_result}")
+            
+            # Save balance check result
+            invoice_ref.update({
+                "payment_processing": {
+                    "balance_check": {
+                        "timestamp": firestore.SERVER_TIMESTAMP,
+                        "available_balance": float(balance_result.split("$")[1].replace(",", "").split()[0]),
+                        "required_amount": payment_details.get("paid_amount"),
+                        "status": "insufficient" if "insufficient" in balance_result.lower() else "sufficient"
+                    }
+                }
+            })
+            
+            # 2. Search for existing payee
+            print("\n[PAYMAN] 2. Searching for payee...")
+            search_tool = SearchPayeesTool()
+            search_params = {
+                "name": payment_details.get("recipient"),
+                "type": "US_ACH"
+            }
+            search_result = search_tool.run(json.dumps(search_params))
+            print(f"Search result: {search_result}")
+            
+            # Save payee search result
+            if isinstance(search_result, list) and search_result:
+                payee_data = search_result[0]
+                invoice_ref.update({
+                    "payment_processing.payee_details": {
+                        "timestamp": firestore.SERVER_TIMESTAMP,
+                        "payee_id": payee_data.get("id"),
+                        "name": payee_data.get("name"),
+                        "status": payee_data.get("status"),
+                        "type": payee_data.get("type"),
+                        "contact_details": payee_data.get("contactDetails", {})
+                    }
+                })
+            
+            # 3. Prepare payment data
+            payment_data = {
                 "invoice_id": request.invoice_id,
                 "invoice_number": payment_details.get("invoice_number"),
+                "paid_amount": payment_details.get("paid_amount"),
                 "amount": payment_details.get("paid_amount"),
                 "recipient": payment_details.get("recipient"),
                 "due_date": payment_details.get("due_date"),
@@ -174,38 +368,104 @@ async def pay_invoice(
                 "bank_details": payment_details.get("bank_details", {}),
                 "payee_details": payment_details.get("payee_details", {}),
                 "customer_details": payment_details.get("customer", {})
+            }
+            print("\n[PAYMAN] 3. Payment Request Data:")
+            print(json.dumps(payment_data, indent=2))
+            
+            # Save payment request data
+            invoice_ref.update({
+                "payment_processing.payment_request": {
+                    "timestamp": firestore.SERVER_TIMESTAMP,
+                    "request_data": payment_data
+                }
             })
             
-            if not payment_result.get("success"):
-                raise ValueError(payment_result.get("error", "Payment processing failed"))
+            # 4. Process payment
+            print("\n[PAYMAN] 4. Processing payment...")
+            payment_result = await process_payment(payment_data)
             
-        except Exception as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Payment processing failed: {str(e)}"
-            )
-        
-        # Update invoice status to paid
-        invoice_ref.update({
-            "status": "paid",
-            "paid_at": firestore.SERVER_TIMESTAMP,
-            "payment_details": {
-                "processed_at": datetime.now().isoformat(),
-                "status": "success",
-                "amount": payment_details.get("paid_amount"),
-                "recipient": payment_details.get("recipient"),
-                "description": payment_details.get("description"),
-                "bank_details": payment_details.get("bank_details", {}),
-                "file_processed": True,
-                "file_path": str(local_path)
+            if not payment_result.get("success"):
+                error_msg = payment_result.get("error", "Payment processing failed")
+                print(f"\n[PAYMAN] ❌ Payment failed: {error_msg}")
+                
+                # Save failure details
+                invoice_ref.update({
+                    "status": "failed",
+                    "payment_processing.status": "failed",
+                    "payment_processing.error": {
+                        "timestamp": firestore.SERVER_TIMESTAMP,
+                        "message": error_msg,
+                        "details": payment_result
+                    }
+                })
+                raise HTTPException(status_code=400, detail=error_msg)
+            
+            print("\n[PAYMAN] ✅ Payment processed successfully")
+            print("\n[PAYMAN] Payment Response Details:")
+            print("-" * 50)
+            print(f"• Reference ID: {payment_result.get('payment_id')}")
+            print(f"• Status: {payment_result.get('status', 'completed')}")
+            print(f"• Payment Method: {payment_result.get('payment_method')}")
+            if payment_result.get('external_reference'):
+                print(f"• External Reference: {payment_result.get('external_reference')}")
+            print(f"• Invoice Number: {payment_result.get('invoice_number')}")
+            print("-" * 50)
+            
+            print("\nPayment Result:")
+            print(json.dumps(payment_result, indent=2))
+            
+            # Save successful payment details
+            payment_update = {
+                "status": "paid",
+                "paid_at": datetime.now().isoformat(),
+                "payment_processing": {
+                    "status": "completed",
+                    "completed_at": datetime.now().isoformat(),
+                    "payment_details": {
+                        "processed_at": datetime.now().isoformat(),
+                        "status": "success",
+                        "amount": payment_details.get("paid_amount"),
+                        "recipient": payment_details.get("recipient"),
+                        "description": payment_details.get("description"),
+                        "bank_details": payment_details.get("bank_details", {}),
+                        "payment_id": payment_result.get("payment_id"),
+                        "payment_method": payment_result.get("payment_method"),
+                        "external_reference": payment_result.get("external_reference"),
+                        "transaction_details": payment_result
+                    },
+                    "file_processed": True,
+                    "file_path": str(local_path)
+                }
             }
-        })
+            print("Final Update Data:")
+            print(json.dumps(payment_update, indent=2))
+            
+            # Convert timestamps before updating Firebase
+            firebase_payment_update = payment_update.copy()
+            firebase_payment_update["paid_at"] = firestore.SERVER_TIMESTAMP
+            firebase_payment_update["payment_processing"]["completed_at"] = firestore.SERVER_TIMESTAMP
+            
+            invoice_ref.update(firebase_payment_update)
+            print("✅ Payment finalized")
         
+        except Exception as e:
+            print(f"\n❌ Payment processing error: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Payment processing failed: {str(e)}")
+        finally:
+            # Clean up downloaded file
+            if 'local_path' in locals() and os.path.exists(local_path):
+                try:
+                    print("\n🧹 Cleaning up downloaded file...")
+                    os.remove(local_path)
+                    print("✅ File cleanup successful")
+                except Exception as e:
+                    print(f"⚠️ File cleanup failed: {str(e)}")
+
         # Get updated invoice data
         updated_invoice = invoice_ref.get().to_dict()
         updated_invoice["id"] = invoice_doc.id
         
-        return {
+        response = {
             "success": True,
             "message": "Payment processed successfully",
             "invoice": serialize_firebase_data(updated_invoice),
@@ -217,17 +477,13 @@ async def pay_invoice(
             }
         }
 
-    except HTTPException:
-        raise
+        print("\n✨ Payment Processing Complete!")
+        print("="*50)
+        return response
+
     except Exception as e:
+        print(f"\n❌ Unexpected Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        # Clean up downloaded file if it exists
-        if 'local_path' in locals() and os.path.exists(local_path):
-            try:
-                os.remove(local_path)
-            except Exception:
-                pass
 
 @app.get("/health")
 async def health_check() -> Dict:
@@ -238,35 +494,49 @@ async def health_check() -> Dict:
     }
 
 @app.get("/payment-history")
-async def get_payment_history(claims: Dict = Depends(verify_jwt)) -> Dict[str, List]:
-    """Get payment history."""
+async def get_payment_history(customer_id: str = Depends(jwt_auth)) -> Dict[str, Any]:
+    """Get payment history with detailed transaction information."""
     try:
-        customer_id = claims.get("customer_id")
-        if not customer_id:
-            raise HTTPException(
-                status_code=400,
-                detail="Customer ID not found in token"
-            )
-            
-        # Get payments from Firestore
         payments = []
-        payment_docs = db.collection("invoices").where("customer_id", "==", customer_id).where("status", "==", "paid").stream()
+        payment_docs = (db.collection("invoices")
+                       .where("customer_id", "==", customer_id)
+                       .where("status", "==", "paid")
+                       .stream())
         
         for doc in payment_docs:
             payment = doc.to_dict()
             payment["id"] = doc.id
-            payments.append(serialize_firebase_data(payment))
             
-        return {"payments": payments}
+            # Add more detailed payment information
+            processed_payment = {
+                "id": doc.id,
+                "invoice_number": payment.get("metadata", {}).get("invoice_number"),
+                "amount": payment.get("metadata", {}).get("amount"),
+                "recipient": payment.get("metadata", {}).get("recipient"),
+                "paid_at": payment.get("paid_at"),
+                "status": payment.get("status"),
+                "payment_details": payment.get("payment_processing", {}).get("payment_details", {}),
+                "transaction_id": payment.get("payment_processing", {}).get("payment_details", {}).get("payment_id"),
+                "payment_method": payment.get("payment_processing", {}).get("payment_details", {}).get("payment_method"),
+                "description": payment.get("metadata", {}).get("description")
+            }
+            
+            payments.append(serialize_firebase_data(processed_payment))
+            
+        return {
+            "success": True,
+            "payments": payments,
+            "summary": {
+                "total_payments": len(payments),
+                "total_amount": sum(payment.get("amount", 0) for payment in payments)
+            }
+        }
         
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error reading payment history: {str(e)}"
-        )
+        print(f"Error fetching payment history: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error reading payment history: {str(e)}")
 
-def main():
-    """Run the FastAPI server using uvicorn."""
+if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         "api:app",
@@ -274,6 +544,3 @@ def main():
         port=8000,
         reload=True
     )
-
-if __name__ == "__main__":
-    main() 
