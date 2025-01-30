@@ -1,3 +1,8 @@
+
+src/venv/
+src/.venv/
+**/__pycache__/
+
 venv/Lib/site-packages/pip/_internal/distributions/__init__.py
 venv/Lib/site-packages/composio/tools/local/clickup/actions/update_space.py
 src/venv/
