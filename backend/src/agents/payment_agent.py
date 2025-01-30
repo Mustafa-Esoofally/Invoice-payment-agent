@@ -1,31 +1,35 @@
 """Payment agent for processing invoice payments using Payman AI and Langchain."""
 
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Any
 import os
 import json
 from datetime import datetime
 import traceback
 from pathlib import Path
 from dotenv import load_dotenv
-from langchain.agents import create_openai_functions_agent, AgentExecutor
-from langchain import hub
+from langchain_openai import ChatOpenAI
+from langchain.agents import AgentExecutor
+from langchain.prompts.chat import MessagesPlaceholder
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.tools import Tool
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
 from composio_langchain import ComposioToolSet
 from langsmith import Client
+from tools.shared_tools import (
+    format_error,
+    format_currency,
+    ensure_directory,
+    DEBUG,
+    debug_print
+)
 
-from src.tools.payment_tools import (
+from tools.payment_tools import (
     BalanceTool,
     SearchPayeesTool,
     SendPaymentTool,
     CheckoutUrlTool
 )
-from src.tools.shared_tools import (
-    debug_print,
-    format_error,
-    format_currency,
-    ensure_directory,
-    DEBUG
-)
-from src.openai_client import get_openai_client
 
 # Load environment variables
 load_dotenv()
@@ -33,8 +37,23 @@ load_dotenv()
 # Initialize LangSmith client
 langsmith_client = Client()
 
+# Get OpenAI API key
+openai_api_key = os.getenv("OPENAI_API_KEY")
+if not openai_api_key:
+    raise ValueError("OPENAI_API_KEY environment variable not found")
+debug_print(f"OpenAI API Key present: {'✓' if openai_api_key else '✗'}")
+
 # Initialize OpenAI client
-openai_client = get_openai_client()
+openai_client = ChatOpenAI(
+    model="gpt-4-turbo-preview",
+    temperature=0,
+    api_key=openai_api_key
+)
+debug_print(f"OpenAI client initialized with model: {openai_client.model_name}")
+
+# Enable debug mode for verbose output
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+debug_print(f"Debug mode: {'enabled' if DEBUG else 'disabled'}")
 
 # Initialize payment tools
 balance_tool = BalanceTool()
@@ -55,12 +74,29 @@ debug_print(f"Composio API Key present: {'✓' if composio_api_key else '✗'}")
 composio_toolset = ComposioToolSet(api_key=composio_api_key)
 tools = composio_toolset.get_tools(actions=['GMAIL_REPLY_TO_THREAD'])
 
-# Create agent with Composio tools and tags for tracing
-prompt = hub.pull("hwchase17/openai-functions-agent")
-agent = create_openai_functions_agent(openai_client, tools, prompt)
+# Create the prompt template
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful AI assistant that processes invoice payments."),
+    MessagesPlaceholder(variable_name="chat_history"),
+    ("user", "{input}"),
+    MessagesPlaceholder(variable_name="agent_scratchpad")
+])
+
+# Create the chain
+chain = (
+    RunnablePassthrough.assign(
+        chat_history=lambda x: x.get("chat_history", []),
+        agent_scratchpad=lambda x: x.get("intermediate_steps", [])
+    )
+    | prompt
+    | openai_client
+    | StrOutputParser()
+)
+
+# Create the agent executor
 agent_executor = AgentExecutor(
-    agent=agent, 
-    tools=tools, 
+    agent=chain,
+    tools=tools,
     verbose=DEBUG,  # Only show verbose output in debug mode
     tags=["invoice-agent", "email-communication"],
     metadata={
@@ -69,7 +105,24 @@ agent_executor = AgentExecutor(
         "environment": os.getenv("ENVIRONMENT", "production")
     }
 )
+
 debug_print("✅ LangChain components initialized")
+
+def serialize_firebase_data(data: Any) -> Any:
+    """Serialize Firebase data types to JSON-compatible format."""
+    if isinstance(data, dict):
+        return {k: serialize_firebase_data(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [serialize_firebase_data(item) for item in data]
+    elif str(type(data)) == "<class 'google.api_core.datetime_helpers.DatetimeWithNanoseconds'>":
+        return data.isoformat()
+    elif hasattr(data, '_seconds'):  # Firebase Timestamp
+        return datetime.fromtimestamp(data._seconds).isoformat()
+    elif str(type(data)) == "<class 'google.cloud.firestore_v1.transforms.Sentinel'>":
+        return datetime.now().isoformat()
+    elif isinstance(data, datetime):
+        return data.isoformat()
+    return data
 
 def extract_payment_amount(invoice_data: Dict) -> Optional[float]:
     """Extract the final payment amount from invoice data."""
@@ -545,7 +598,9 @@ async def process_payment(invoice_data: Dict) -> Dict:
         
         debug_print("\n📝 Invoice Data:")
         debug_print("-" * 30)
-        debug_print(json.dumps(invoice_data, indent=2))
+        # Serialize the data before JSON dumps
+        serialized_data = serialize_firebase_data(invoice_data)
+        debug_print(json.dumps(serialized_data, indent=2))
         
         # Check for required fields
         required_fields = ["invoice_number", "paid_amount", "recipient"]
@@ -769,7 +824,8 @@ async def process_payment(invoice_data: Dict) -> Dict:
                 "error_type": type(e).__name__,
                 "invoice_number": invoice_data.get("invoice_number"),
                 "workflow_type": "payment_processing"
-            }
+            },
+            run_type="chain"
         )
         
         debug_print(f"\n❌ Payment processing error:")
