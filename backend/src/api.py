@@ -26,15 +26,69 @@ try:
     print("Using existing Firebase app")
 except ValueError:
     try:
-        cred = credentials.Certificate("byrdeai-firebase-adminsdk-fbsvc-a168a9a31d.json")
-        firebase_app = initialize_app(cred)
-        print("Initialized new Firebase app")
+        # Get the current file's directory
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        cred_path = os.path.join(current_dir, "payman-agent-render-firebase-adminsdk-fbsvc-76639f1307.json")
+        print(f"\n🔑 Firebase Credentials:")
+        print(f"  Directory: {current_dir}")
+        print(f"  Full path: {cred_path}")
+        print(f"  File exists: {os.path.exists(cred_path)}")
+        
+        # Read and validate the credentials file
+        with open(cred_path, 'r', encoding='utf-8') as f:
+            cred_json = json.load(f)
+            print("\n📄 Credential File Contents:")
+            print(f"  type: {cred_json.get('type')}")
+            print(f"  project_id: {cred_json.get('project_id')}")
+            print(f"  client_email: {cred_json.get('client_email')}")
+            print(f"  private_key_id: {cred_json.get('private_key_id')}")
+            print(f"  Has private_key: {'private_key' in cred_json}")
+            
+            # Verify private key format
+            private_key = cred_json.get('private_key', '')
+            if private_key:
+                print("\n🔐 Private Key Validation:")
+                print(f"  Starts with: {private_key.startswith('-----BEGIN PRIVATE KEY-----')}")
+                print(f"  Ends with: {private_key.endswith('-----END PRIVATE KEY-----\n')}")
+                print(f"  Length: {len(private_key)} characters")
+                print(f"  Line endings: {'\\n' in private_key}")
+        
+        # Initialize credentials
+        print("\n🔄 Initializing Firebase Admin SDK:")
+        cred = credentials.Certificate(cred_path)
+        print("  ✓ Credentials initialized")
+        
+        # Initialize app with explicit configuration
+        firebase_app = initialize_app(cred, {
+            'storageBucket': 'payman-agent-render.firebasestorage.app',
+            'projectId': cred_json['project_id']
+        })
+        print("  ✓ Firebase app initialized")
+        
+        # Test connection
+        db = firestore.client()
+        test_doc = db.collection('test').document('test')
+        print("  ✓ Firestore connection tested")
+        
+    except json.JSONDecodeError as e:
+        print(f"\n❌ Error parsing credentials JSON:")
+        print(f"  Error: {str(e)}")
+        raise
     except Exception as e:
-        print(f"Error initializing Firebase: {str(e)}")
+        print(f"\n❌ Error initializing Firebase:")
+        print(f"  Type: {type(e).__name__}")
+        print(f"  Error: {str(e)}")
+        print("\nStack trace:")
+        traceback.print_exc()
         raise
 
+# Initialize Firestore
 db = firestore.client()
 print("Connected to Firestore database")
+
+# Initialize Storage bucket
+bucket = storage.bucket('payman-agent-render.firebasestorage.app')
+print("Connected to Storage bucket")
 
 print("\n🚀 Starting Invoice Payment Agent API")
 print("=" * 50)
@@ -287,77 +341,81 @@ async def download_file(url: str, local_path: str) -> bool:
             shutil.copy2(url, local_path)
             return True
             
-        # Otherwise, try to download from URL
-        from urllib.parse import quote, urlparse, parse_qs, urlencode, unquote
-        
-        # Parse the URL
-        parsed_url = urlparse(url)
-        print(f"\nURL Components:")
-        print(f"  Scheme: {parsed_url.scheme}")
-        print(f"  Netloc: {parsed_url.netloc}")
-        print(f"  Path: {parsed_url.path}")
-        print(f"  Query: {parsed_url.query}")
-        
-        # For Firebase Storage URLs, handle the URL differently
-        if 'firebasestorage.googleapis.com' in parsed_url.netloc:
-            # Get the bucket and object path
-            path_parts = parsed_url.path.split('/')
-            # The object name is after /o/ in the path
-            obj_name_idx = path_parts.index('o') + 1 if 'o' in path_parts else -1
-            
-            if obj_name_idx != -1 and obj_name_idx < len(path_parts):
-                # Get the encoded object name
-                obj_name = unquote(path_parts[obj_name_idx])
-                print(f"\nFirebase Storage Object:")
-                print(f"  Object Name: {obj_name}")
+        # For Firebase Storage URLs
+        if 'storage.googleapis.com' in url or 'firebasestorage.googleapis.com' in url:
+            try:
+                # Extract file path from URL
+                from urllib.parse import urlparse, unquote
+                parsed_url = urlparse(url)
+                path_parts = parsed_url.path.split('/o/')
                 
-                # Create a new properly encoded URL
-                encoded_obj_name = quote(obj_name, safe='')
-                new_path = '/'.join(path_parts[:obj_name_idx]) + '/' + encoded_obj_name
-                encoded_url = f"{parsed_url.scheme}://{parsed_url.netloc}{new_path}?{parsed_url.query}"
-            else:
-                encoded_url = url
-        else:
-            # For other URLs, use the original URL
-            encoded_url = url
+                if len(path_parts) == 2:
+                    # URL format: https://storage.googleapis.com/BUCKET_NAME/o/FILE_PATH
+                    file_path = unquote(path_parts[1].split('?')[0])
+                else:
+                    # Alternative format: extract from the full path
+                    path_segments = parsed_url.path.split('/')
+                    if len(path_segments) >= 4:  # At least /BUCKET/o/FILE_PATH
+                        file_path = unquote('/'.join(path_segments[3:]).split('?')[0])
+                    else:
+                        raise ValueError("Could not extract file path from URL")
+                
+                print(f"  Firebase Storage details:")
+                print(f"    File path: {file_path}")
+                
+                # Use Firebase Admin SDK to download
+                try:
+                    print(f"  Accessing Firebase Storage...")
+                    blob = bucket.blob(file_path)
+                    
+                    # Download using Firebase Admin SDK
+                    print(f"  Downloading blob to {local_path}...")
+                    blob.download_to_filename(local_path)
+                    
+                    # Verify download
+                    if os.path.exists(local_path):
+                        file_size = os.path.getsize(local_path)
+                        print(f"  ✓ File downloaded successfully ({file_size:,} bytes)")
+                        return True
+                    else:
+                        print("  ✗ File was not downloaded")
+                        return False
+                
+                except Exception as e:
+                    print(f"  ✗ Firebase Storage error: {str(e)}")
+                    return False
+                    
+            except Exception as e:
+                print(f"  ✗ Error processing Firebase Storage URL: {str(e)}")
+                traceback.print_exc()
+                return False
         
-        print(f"\nDownload URL:")
-        print(f"  Encoded URL: {encoded_url}")
-        
+        # For other URLs, use aiohttp
+        print("  Using HTTP download method")
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
         
         async with aiohttp.ClientSession() as session:
-            print("\nMaking HTTP Request...")
-            async with session.get(encoded_url, headers=headers) as response:
-                print(f"  Status Code: {response.status}")
-                print(f"  Content Type: {response.headers.get('content-type', 'unknown')}")
-                print(f"  Content Length: {response.headers.get('content-length', 'unknown')} bytes")
-                
+            async with session.get(url, headers=headers) as response:
                 if response.status == 200:
                     with open(local_path, 'wb') as f:
-                        total_size = 0
                         while True:
                             chunk = await response.content.read(8192)
                             if not chunk:
                                 break
                             f.write(chunk)
-                            total_size += len(chunk)
-                            
+                    
                     file_size = os.path.getsize(local_path)
-                    print(f"\nFile Download Complete:")
-                    print(f"  ✓ Saved to: {os.path.abspath(local_path)}")
-                    print(f"  ✓ File size: {file_size:,} bytes")
-                    print(f"  ✓ MD5 hash: {response.headers.get('etag', 'unknown')}")
+                    print(f"  ✓ File downloaded successfully ({file_size:,} bytes)")
                     return True
                 else:
-                    print(f"\nDownload Failed:")
-                    print(f"  ✗ Status Code: {response.status}")
+                    print(f"  ✗ HTTP download failed with status {response.status}")
                     print(f"  ✗ Error: {await response.text()}")
                     return False
+                    
     except Exception as e:
-        print(f"\nError During Download:")
+        print(f"\nDownload Error:")
         print(f"  ✗ Type: {type(e).__name__}")
         print(f"  ✗ Message: {str(e)}")
         traceback.print_exc()
@@ -420,63 +478,23 @@ async def pay_invoice(
         print(json.dumps(serialized_data, indent=2))
         await print_invoice_details(serialized_data)
         
-        # Extract file_url from invoice data
-        print("\n🔍 Looking for file URL in invoice data...")
-        
-        # Try to get file_url from all possible locations
-        file_url = None
-        file_name = None
-        
-        # First try to get from root level
-        if "file_url" in invoice_data:
-            file_url = invoice_data["file_url"]
-            file_name = invoice_data.get("file_name")
-            print(f"  ✓ Found file_url in root: {file_url}")
-        
-        # Then try in the data field
-        elif "data" in invoice_data:
-            data = invoice_data["data"]
-            if isinstance(data, dict):
-                if "file_url" in data:
-                    file_url = data["file_url"]
-                    file_name = data.get("file_name")
-                    print(f"  ✓ Found file_url in data: {file_url}")
-                elif "file" in data:
-                    file_data = data["file"]
-                    if isinstance(file_data, str):
-                        file_url = file_data
-                        print(f"  ✓ Found file_url in data.file: {file_url}")
-                    elif isinstance(file_data, dict):
-                        file_url = file_data.get("url")
-                        file_name = file_data.get("name")
-                        print(f"  ✓ Found file_url in data.file object: {file_url}")
-            
-        if not file_url:
-            print("\n❌ No file URL found in invoice data")
-            print("Available fields in invoice:")
-            for key, value in invoice_data.items():
-                print(f"  - {key}: {type(value)}")
-            if "data" in invoice_data:
-                print("\nAvailable fields in data:")
-                data = invoice_data["data"]
-                if isinstance(data, dict):
-                    for key, value in data.items():
-                        print(f"  - {key}: {type(value)}")
+        # Get the file path from invoice data
+        print("\n🔍 Looking for file path in invoice data...")
+        file_path = invoice_data.get("file_path")
+        if not file_path:
+            print("❌ No file path found in invoice data")
             raise HTTPException(
                 status_code=400,
-                detail="Invoice file URL not found"
+                detail="Invoice file path not found"
             )
-        
-        # Convert file URL to proper path if it's a local file
-        if os.path.isabs(file_url):
-            file_url = os.path.normpath(file_url)
-            print(f"  ✓ Normalized local file path: {file_url}")
+        print(f"  ✓ Found file path: {file_path}")
         
         # Create downloads directory if it doesn't exist
         downloads_dir = Path("downloads")
         downloads_dir.mkdir(exist_ok=True)
         
         # Generate local file path - ensure safe filename
+        file_name = os.path.basename(file_path)
         if not file_name:
             file_name = f"invoice_{request.invoice_id}.pdf"
         else:
@@ -486,26 +504,36 @@ async def pay_invoice(
             
         local_path = downloads_dir / file_name
         
-        # Download or copy the invoice file
+        # Download the invoice file using Firebase Storage
         print(f"\n📥 Processing invoice file...")
-        print(f"  Source: {file_url}")
+        print(f"  Source path: {file_path}")
         print(f"  Destination: {local_path}")
         
-        if not await download_file(file_url, str(local_path)):
-            print("❌ Failed to process invoice file")
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to process invoice file"
-            )
-        
-        if not os.path.exists(local_path):
-            print("❌ File was not downloaded correctly")
-            raise HTTPException(
-                status_code=500,
-                detail="File was not downloaded correctly"
-            )
+        try:
+            # Download using Firebase Admin SDK
+            print(f"  Accessing Firebase Storage...")
+            blob = bucket.blob(file_path)
             
-        print(f"✅ File processed successfully ({os.path.getsize(local_path)} bytes)")
+            # Download the file
+            print(f"  Downloading blob to {local_path}...")
+            blob.download_to_filename(str(local_path))
+            
+            # Verify download
+            if os.path.exists(local_path):
+                file_size = os.path.getsize(local_path)
+                print(f"  ✓ File downloaded successfully ({file_size:,} bytes)")
+            else:
+                print("  ✗ File was not downloaded")
+                raise HTTPException(
+                    status_code=500,
+                    detail="Failed to download invoice file"
+                )
+        except Exception as e:
+            print(f"  ✗ Firebase Storage error: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to download invoice file: {str(e)}"
+            )
         
         # Update invoice status to processing
         print("\n📝 Updating invoice status to processing...")
@@ -514,10 +542,60 @@ async def pay_invoice(
             "processing_started_at": firestore.SERVER_TIMESTAMP,
             "local_file_path": str(local_path)
         })
+
+        # Extract payment details from PDF using PDF Agent
+        print("\n📄 Extracting payment details from PDF...")
+        try:
+            # Extract text and payment details from PDF
+            payment_details = extract_text(str(local_path), extract_metadata=True, debug=True)
+            
+            if not payment_details or "error" in payment_details:
+                raise ValueError(payment_details.get("error", "Failed to extract payment details from PDF"))
+                
+            print("\n💳 Extracted Payment Details:")
+            print(json.dumps(payment_details, indent=2))
+            
+            # Update invoice with extracted details
+            invoice_ref.update({
+                "extracted_details": payment_details,
+                "last_updated": firestore.SERVER_TIMESTAMP
+            })
+            
+        except Exception as e:
+            print(f"  ✗ Error extracting payment details: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to extract payment details: {str(e)}"
+            )
         
-        # Here you would typically integrate with a payment processor
-        # For now, we'll just simulate a successful payment
+        # Process payment using extracted details
         print("\n💰 Processing payment...")
+        try:
+            # Process payment using payment agent
+            payment_result = await process_payment({
+                "invoice_id": request.invoice_id,
+                "invoice_number": payment_details.get("invoice_number"),
+                "amount": payment_details.get("paid_amount"),
+                "recipient": payment_details.get("recipient"),
+                "due_date": payment_details.get("due_date"),
+                "description": payment_details.get("description"),
+                "customer_id": customer_id,
+                "bank_details": payment_details.get("bank_details", {}),
+                "payee_details": payment_details.get("payee_details", {}),
+                "customer_details": payment_details.get("customer", {})
+            })
+            
+            if not payment_result.get("success"):
+                raise ValueError(payment_result.get("error", "Payment processing failed"))
+                
+            print("  ✓ Payment processed successfully")
+            
+        except Exception as e:
+            print(f"  ✗ Payment processing error: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Payment processing failed: {str(e)}"
+            )
         
         # Update invoice status to paid
         print("\n✅ Payment successful! Updating invoice status...")
@@ -527,6 +605,10 @@ async def pay_invoice(
             "payment_details": {
                 "processed_at": datetime.now().isoformat(),
                 "status": "success",
+                "amount": payment_details.get("paid_amount"),
+                "recipient": payment_details.get("recipient"),
+                "description": payment_details.get("description"),
+                "bank_details": payment_details.get("bank_details", {}),
                 "file_processed": True,
                 "file_path": str(local_path)
             }
@@ -540,6 +622,7 @@ async def pay_invoice(
             "success": True,
             "message": "Payment processed successfully",
             "invoice": serialize_firebase_data(updated_invoice),
+            "payment_details": payment_details,
             "file": {
                 "name": file_name,
                 "path": str(local_path),
@@ -555,10 +638,10 @@ async def pay_invoice(
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         # Clean up downloaded file if it exists
-        if 'local_path' in locals() and local_path.exists():
+        if 'local_path' in locals() and os.path.exists(local_path):
             try:
                 print("\n🧹 Cleaning up downloaded file...")
-                local_path.unlink()
+                os.remove(local_path)
                 print("✅ File cleanup successful")
             except Exception as e:
                 print(f"⚠️ Error cleaning up file: {str(e)}")

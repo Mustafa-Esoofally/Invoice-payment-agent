@@ -1,2 +1,4 @@
 venv/Lib/site-packages/pip/_internal/distributions/__init__.py
 venv/Lib/site-packages/composio/tools/local/clickup/actions/update_space.py
+src/venv/
+src/payman-agent-render-firebase-adminsdk-fbsvc-76639f1307.json
