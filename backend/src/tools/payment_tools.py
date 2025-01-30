@@ -136,7 +136,7 @@ class SearchPayeesTool(BaseTool):
             # Parse search parameters
             params = json.loads(tool_input)
             
-            print("\n[PAYMAN] �� Search Request:")
+            print("\n[PAYMAN] 🔍 Search Request:")
             print("-" * 40)
             print(json.dumps(params, indent=2))
             
@@ -201,26 +201,71 @@ class SendPaymentTool(BaseTool):
                 memo=params.get("memo")
             )
             
-            # Handle response
-            if isinstance(payment, str):
+            print(f"\n[PAYMAN] 💸 Raw Payment Response:")
+            print("-" * 40)
+            print(json.dumps(payment, indent=2, default=str))
+            
+            # Handle response serialization
+            if hasattr(payment, '__dict__'):
+                payment_dict = payment.__dict__
+            elif isinstance(payment, str):
                 try:
-                    payment = json.loads(payment)
+                    payment_dict = json.loads(payment)
                 except json.JSONDecodeError:
-                    print("\n[PAYMAN] ❌ Failed to parse API response - Invalid JSON")
-                    return "❌ Payment failed: Invalid API response"
+                    payment_dict = {"error": "Invalid JSON response"}
+            elif isinstance(payment, dict):
+                payment_dict = payment
+            else:
+                payment_dict = {"error": f"Unexpected response type: {type(payment)}"}
             
-            # Extract reference
-            ref = handle_api_response(payment, 'reference') or 'Unknown'
+            print(f"\n[PAYMAN] 💸 Parsed Payment Response:")
+            print("-" * 40)
+            print(json.dumps(payment_dict, indent=2))
+            
+            # Check for error in response
+            if "error" in payment_dict or payment_dict.get("status") == "failed":
+                error_msg = payment_dict.get("error") or "Payment failed"
+                print(f"\n[PAYMAN] ❌ Payment failed: {error_msg}")
+                return json.dumps({
+                    "success": False,
+                    "error": error_msg,
+                    "error_type": "PaymentFailed",
+                    "details": payment_dict
+                })
+            
+            # Extract important fields
+            reference = payment_dict.get('reference') or payment_dict.get('payment_id', 'Unknown')
+            status = payment_dict.get('status', 'completed')
+            
             print(f"\n[PAYMAN] ✅ Payment processed successfully")
-            print(f"  • Reference: {ref}")
+            print(f"  • Reference: {reference}")
+            print(f"  • Status: {status}")
+            print(f"  • Amount: ${float(params['amount']):.2f}")
+            print(f"  • Destination ID: {params['destination_id']}")
+            if params.get('memo'):
+                print(f"  • Memo: {params['memo']}")
             
-            return f"✅ Payment sent successfully! Reference: {ref}"
+            # Return serializable response
+            response = {
+                "success": True,
+                "payment_id": reference,
+                "status": status,
+                "payment_method": "existing_payee",
+                "details": payment_dict
+            }
+            
+            return json.dumps(response)
             
         except Exception as e:
             print(f"\n[PAYMAN] ❌ Payment Error:")
             print(f"  • Type: {type(e).__name__}")
             print(f"  • Details: {str(e)}")
-            return f"❌ Payment failed: {str(e)}"
+            error_response = {
+                "success": False,
+                "error": str(e),
+                "error_type": type(e).__name__
+            }
+            return json.dumps(error_response)
 
 class BatchPaymentsTool(BaseTool):
     name: str = "process_batch_payments"
