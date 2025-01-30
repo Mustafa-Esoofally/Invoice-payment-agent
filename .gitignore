@@ -180,5 +180,7 @@ frontend/package-lock.json
 
 # invoice data
 backend/invoice data/email_attachments/
-
 backend/src/payman-agent-render-firebase-adminsdk-fbsvc-76639f1307.json
+backend/venv/
+backend/byrdeai-firebase-adminsdk-fbsvc-a168a9a31d.json
+backend/src/byrdeai-firebase-adminsdk-fbsvc-a168a9a31d.json

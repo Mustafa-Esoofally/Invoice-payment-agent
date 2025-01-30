@@ -11,12 +11,12 @@ from datetime import datetime
 from dotenv import load_dotenv
 from langchain_core.messages import SystemMessage, HumanMessage
 
-from src.tools.shared_tools import (
+from tools.shared_tools import (
     debug_print,
     format_error,
     ensure_directory
 )
-from src.openai_client import get_openai_client
+from openai_client import get_openai_client
 
 class PaymentExtractor:
     """Extract and validate payment information from invoices."""
