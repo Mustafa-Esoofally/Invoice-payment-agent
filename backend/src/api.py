@@ -11,7 +11,8 @@ import re
 from pathlib import Path
 from firebase_admin import initialize_app, credentials, firestore, storage
 from dotenv import load_dotenv
-from config.auth import jwt_auth
+
+from auth.auth import jwt_auth
 from agents.pdf_agent import extract_text
 from agents.payment_agent import process_payment
 from tools.payment_tools import BalanceTool, SearchPayeesTool, SendPaymentTool, CheckoutUrlTool
@@ -469,7 +470,18 @@ async def pay_invoice(
             "success": True,
             "message": "Payment processed successfully",
             "invoice": serialize_firebase_data(updated_invoice),
-            "payment_details": payment_details,
+            "payment_details": {
+                "payment_id": payment_result.get("payment_id"),
+                "status": payment_result.get("status", "completed"),
+                "amount": payment_details.get("paid_amount"),
+                "recipient": payment_details.get("recipient"),
+                "payment_method": payment_result.get("payment_method"),
+                "external_reference": payment_result.get("external_reference"),
+                "processed_at": datetime.now().isoformat(),
+                "description": payment_details.get("description"),
+                "invoice_number": payment_details.get("invoice_number"),
+                "transaction_details": payment_result
+            },
             "file": {
                 "name": file_name,
                 "path": str(local_path),
@@ -492,49 +504,6 @@ async def health_check() -> Dict:
         "status": "healthy",
         "version": "1.0.0"
     }
-
-@app.get("/payment-history")
-async def get_payment_history(customer_id: str = Depends(jwt_auth)) -> Dict[str, Any]:
-    """Get payment history with detailed transaction information."""
-    try:
-        payments = []
-        payment_docs = (db.collection("invoices")
-                       .where("customer_id", "==", customer_id)
-                       .where("status", "==", "paid")
-                       .stream())
-        
-        for doc in payment_docs:
-            payment = doc.to_dict()
-            payment["id"] = doc.id
-            
-            # Add more detailed payment information
-            processed_payment = {
-                "id": doc.id,
-                "invoice_number": payment.get("metadata", {}).get("invoice_number"),
-                "amount": payment.get("metadata", {}).get("amount"),
-                "recipient": payment.get("metadata", {}).get("recipient"),
-                "paid_at": payment.get("paid_at"),
-                "status": payment.get("status"),
-                "payment_details": payment.get("payment_processing", {}).get("payment_details", {}),
-                "transaction_id": payment.get("payment_processing", {}).get("payment_details", {}).get("payment_id"),
-                "payment_method": payment.get("payment_processing", {}).get("payment_details", {}).get("payment_method"),
-                "description": payment.get("metadata", {}).get("description")
-            }
-            
-            payments.append(serialize_firebase_data(processed_payment))
-            
-        return {
-            "success": True,
-            "payments": payments,
-            "summary": {
-                "total_payments": len(payments),
-                "total_amount": sum(payment.get("amount", 0) for payment in payments)
-            }
-        }
-        
-    except Exception as e:
-        print(f"Error fetching payment history: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error reading payment history: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
