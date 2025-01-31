@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: invoice-payment-agent-api
+    env: python
+    buildCommand: pip install -r src/requirements.txt
+    startCommand: cd src && uvicorn api:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.1
+      - key: RENDER
+        value: true
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: COMPOSIO_API_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY_ID
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_CLIENT_ID
+        sync: false
+      - key: FIREBASE_CLIENT_CERT_URL
+        sync: false
+      - key: FIREBASE_STORAGE_BUCKET
+        sync: false
+    healthCheckPath: /health 

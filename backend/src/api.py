@@ -27,15 +27,46 @@ required_env_vars = [
     "JWT_SECRET"
 ]
 
+# Add Firebase environment variables if running on Render
+if os.getenv('RENDER'):
+    required_env_vars.extend([
+        "FIREBASE_PROJECT_ID",
+        "FIREBASE_PRIVATE_KEY_ID",
+        "FIREBASE_PRIVATE_KEY",
+        "FIREBASE_CLIENT_EMAIL",
+        "FIREBASE_CLIENT_ID",
+        "FIREBASE_CLIENT_CERT_URL",
+        "FIREBASE_STORAGE_BUCKET"
+    ])
+
 missing_vars = [var for var in required_env_vars if not os.getenv(var)]
 if missing_vars:
     raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
 
 # Initialize Firebase Admin SDK
 try:
-    cred = credentials.Certificate("payman-agent-render-firebase-adminsdk-fbsvc-76639f1307.json")
+    # Check if running in production (Render)
+    if os.getenv('RENDER'):
+        # Use environment variable for Firebase credentials
+        firebase_creds = {
+            "type": "service_account",
+            "project_id": os.getenv('FIREBASE_PROJECT_ID'),
+            "private_key_id": os.getenv('FIREBASE_PRIVATE_KEY_ID'),
+            "private_key": os.getenv('FIREBASE_PRIVATE_KEY').replace('\\n', '\n'),
+            "client_email": os.getenv('FIREBASE_CLIENT_EMAIL'),
+            "client_id": os.getenv('FIREBASE_CLIENT_ID'),
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+            "client_x509_cert_url": os.getenv('FIREBASE_CLIENT_CERT_URL')
+        }
+        cred = credentials.Certificate(firebase_creds)
+    else:
+        # Local development - use credentials file
+        cred = credentials.Certificate("payman-agent-render-firebase-adminsdk-fbsvc-76639f1307.json")
+    
     app = initialize_app(cred, {
-        'storageBucket': 'payman-agent-render.firebasestorage.app'
+        'storageBucket': os.getenv('FIREBASE_STORAGE_BUCKET', 'payman-agent-render.firebasestorage.app')
     })
     db = firestore.client()
     bucket = storage.bucket()
@@ -499,10 +530,10 @@ async def pay_invoice(
 
 @app.get("/health")
 async def health_check() -> Dict:
-    """Health check endpoint."""
+    """Health check endpoint for monitoring."""
     return {
         "status": "healthy",
-        "version": "1.0.0"
+        "timestamp": datetime.now().isoformat()
     }
 
 if __name__ == "__main__":

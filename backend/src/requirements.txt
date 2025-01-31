@@ -61,8 +61,6 @@ idna==3.10
 importlib_metadata==8.6.1
 inflection==0.5.1
 iniconfig==2.0.0
-# Editable install with no version control (invoice-payment-agent==1.0.0)
--e c:\users\coolm\onedrive - florida international university\projects\challenges\payman\backend
 isort==5.13.2
 jiter==0.8.2
 jsonpatch==1.33
